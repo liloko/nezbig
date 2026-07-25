@@ -19,7 +19,7 @@ const COURSE_TITLE_MARKERS = [
   /студент(?:ка|)/i
 ];
 
-const BODY_START_PATTERN = /(?<![\p{L}\p{N}_])(зміст|вступ|розділ\s*1|розділ\s*i|chapter\s*1|introduction)(?![\p{L}\p{N}_])/iu;
+const BODY_START_PATTERN = /(?<![\p{L}\p{N}_])(вступ|розділ\s*1|розділ\s*i|chapter\s*1|introduction)(?![\p{L}\p{N}_])/iu;
 
 export function prepareDocumentText(rawText: string): PreparedDocument {
   const prose = filterProseText(rawText);

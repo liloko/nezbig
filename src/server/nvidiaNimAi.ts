@@ -19,7 +19,7 @@ type NvidiaResponse = {
 
 const NVIDIA_NIM_URL = "https://integrate.api.nvidia.com/v1/chat/completions";
 const NVIDIA_TIMEOUT_MS = 32_000;
-const MAX_ANALYSIS_CHARS = 18000;
+const MAX_ANALYSIS_CHARS = 6000;
 const DEFAULT_NIM_MODELS = ["nvidia/llama-3.1-nemotron-ultra-253b-v1", "meta/llama-3.3-70b-instruct", "meta/llama-3.1-70b-instruct"];
 
 function getNvidiaConfig(): { apiKey: string; models: string[] } | null {

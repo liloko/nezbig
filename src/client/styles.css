@@ -403,7 +403,15 @@ textarea:focus,
 
 .rich-editor p,
 .rich-output p {
-  margin: 0 0 0.75rem;
+  margin: 0.5em 0;
+}
+
+.rich-editor *[style*="font-size"],
+.rich-output *[style*="font-size"],
+.rich-editor [class^="Nezbig"],
+.rich-output [class^="Nezbig"] {
+  font-size: 1rem !important;
+  line-height: 1.5 !important;
 }
 
 .rich-editor h1,

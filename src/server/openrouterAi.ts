@@ -33,7 +33,7 @@ type OpenRouterResponse = {
 };
 
 const OPENROUTER_URL = "https://openrouter.ai/api/v1/chat/completions";
-const MAX_ANALYSIS_CHARS = 18000;
+const MAX_ANALYSIS_CHARS = 6000;
 const OPENROUTER_TIMEOUT_MS = 24_000;
 const FALLBACK_MODELS = ["openrouter/owl-alpha", "nvidia/nemotron-3-super-120b-a12b:free", "openai/gpt-oss-120b:free", "deepseek/deepseek-v4-flash:free", "z-ai/glm-4.5-air:free"];
 
