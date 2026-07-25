@@ -4,6 +4,7 @@ import { insertRichHtmlAtSelection } from "./richPaste";
 import { htmlFromPlainText, plainTextFromRichHtml, sanitizeRichHtml } from "./richText";
 import { copyRichTextForWord } from "./wordClipboard";
 import { downloadWordDocument, revisedDocxFileName } from "./wordDocument";
+import { siDuckduckgo, siGoogle, siBrave, siWikipedia, siSemanticscholar } from "simple-icons";
 import type { HumanizeResult, LlmOpinion, ScanReport, ScanSettings, UploadedText } from "../shared/types";
 
 const defaultSettings: ScanSettings = {
@@ -117,6 +118,23 @@ function reportSummaryText(report: ScanReport): string {
 
 function confidenceLabel(value: "snippet" | "page"): string {
   return value === "page" ? "сторінку прочитано" : "лише уривок пошуку";
+}
+
+function ProviderIcon({ provider, className }: { provider: string; className?: string }) {
+  let icon;
+  switch (provider.toLowerCase()) {
+    case "duckduckgo": icon = siDuckduckgo; break;
+    case "google": icon = siGoogle; break;
+    case "brave": icon = siBrave; break;
+    case "wikipedia": icon = siWikipedia; break;
+    case "semantic scholar": icon = siSemanticscholar; break;
+    default: return null;
+  }
+  return (
+    <svg className={className} role="img" viewBox="0 0 24 24" width="16" height="16" style={{ fill: "currentColor", display: "inline-block", verticalAlign: "middle", marginRight: "6px" }} xmlns="http://www.w3.org/2000/svg">
+      <path d={icon.path} />
+    </svg>
+  );
 }
 
 function providerDiagnosticLabel(provider: NonNullable<ScanReport["searchDiagnostics"]>["providers"][number]): string {
@@ -960,8 +978,10 @@ export default function App() {
                           key={provider.provider}
                           title={provider.skippedReason ?? `${provider.failed} помилок, ${provider.timedOut} timeout`}
                         >
-                          <strong>{provider.provider}</strong>
-                          {providerDiagnosticLabel(provider)}
+                          <div className="provider-health-metric">
+                            <strong><ProviderIcon provider={provider.provider} /> {provider.provider}</strong>
+                            {providerDiagnosticLabel(provider)}
+                          </div>
                         </span>
                       ))}
                       <span title="Сторінки, текст яких сервер зміг прочитати для підтвердження збігу">
@@ -1025,8 +1045,8 @@ export default function App() {
                               <dd>{confidenceLabel(match.confidence)}</dd>
                             </div>
                             <div>
-                              <dt>Індекс</dt>
-                              <dd>{match.provider ?? "Web"}</dd>
+                              <dt>Джерело:</dt>
+                              <dd><ProviderIcon provider={match.provider ?? ""} /> {match.provider ?? "Web"}</dd>
                             </div>
                           </dl>
                         </article>
