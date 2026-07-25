@@ -8,6 +8,7 @@ describe("scoreCandidate", () => {
       title: "Academic Integrity Guide",
       url: "https://example.com",
       snippet: "Academic integrity depends on careful citation and transparent research methods in student writing.",
+      provider: "test",
       sourceText:
         "Academic integrity depends on careful citation, transparent research methods, and original synthesis across multiple sources. Student writing should show careful citation, transparent research methods, and original synthesis."
     };
@@ -25,6 +26,7 @@ describe("scoreCandidate", () => {
       title: "Laboratory protocol",
       url: "https://example.com/protocol",
       snippet: "A protocol for calibrated sensor measurements.",
+      provider: "test",
       sourceText: `Background material appears before the copied passage. ${source} Additional commentary and references appear after the copied passage.`
     };
 
@@ -44,6 +46,7 @@ describe("scoreCandidate", () => {
       {
         title: "Search result",
         url: "https://example.com/lead",
+        provider: "test",
         snippet: source
       },
       0
@@ -54,6 +57,7 @@ describe("scoreCandidate", () => {
         title: "Verified source",
         url: "https://example.com/page",
         snippet: "A source about academic integrity.",
+        provider: "test",
         sourceText: `Introductory material. ${source} Additional verified page content.`
       },
       0

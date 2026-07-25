@@ -11,7 +11,7 @@ describe("web search diagnostics", () => {
     const url = `https://unavailable-${crypto.randomUUID()}.example/page`;
     const fetchMock = vi.fn().mockResolvedValue(new Response("down", { status: 503 }));
     vi.stubGlobal("fetch", fetchMock);
-    const candidate = { title: "Unavailable", url, snippet: "A candidate page that cannot be read." };
+    const candidate = { title: "Unavailable", url, provider: "test", snippet: "A candidate page that cannot be read." };
 
     const first = await hydrateSearchCandidatesDetailed([candidate], 1);
     const second = await hydrateSearchCandidatesDetailed([candidate], 1);
