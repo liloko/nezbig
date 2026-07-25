@@ -31,3 +31,12 @@ AI detection is a transparent segment-based heuristic ensemble with a separate o
 ## Architecture
 
 The Ukrainian diploma-style architecture description is available in [`docs/ARCHITECTURE_UA.md`](docs/ARCHITECTURE_UA.md).
+
+## E2E Testing
+
+Playwright is configured to store browser binaries on drive `D:` to save space on `C:`. 
+To run tests locally, you must specify the `PLAYWRIGHT_BROWSERS_PATH` environment variable:
+
+```powershell
+$env:PLAYWRIGHT_BROWSERS_PATH="D:\playwright-browsers"; npx playwright test
+```
