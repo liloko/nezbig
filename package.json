@@ -25,6 +25,7 @@
     "express": "^5.2.1",
     "express-rate-limit": "^8.6.0",
     "franc-min": "^6.2.0",
+    "jspdf": "^4.2.1",
     "jszip": "^3.10.1",
     "mammoth": "^1.11.0",
     "multer": "^2.0.2",

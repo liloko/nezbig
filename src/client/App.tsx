@@ -5,6 +5,7 @@ import { htmlFromPlainText, plainTextFromRichHtml, sanitizeRichHtml } from "./ri
 import { copyRichTextForWord } from "./wordClipboard";
 import { downloadWordDocument, revisedDocxFileName } from "./wordDocument";
 import { siDuckduckgo, siGoogle, siBrave, siWikipedia, siSemanticscholar } from "simple-icons";
+import { jsPDF } from "jspdf";
 import type { HumanizeResult, LlmOpinion, ScanReport, ScanSettings, UploadedText } from "../shared/types";
 
 const defaultSettings: ScanSettings = {
@@ -181,7 +182,7 @@ function wrapCanvasText(context: CanvasRenderingContext2D, text: string, x: numb
   return currentY;
 }
 
-function downloadReportPng(report: ScanReport): void {
+function generateReportCanvas(report: ScanReport): HTMLCanvasElement {
   const canvas = document.createElement("canvas");
   const width = 1400;
   const height = 1800;
@@ -192,7 +193,7 @@ function downloadReportPng(report: ScanReport): void {
   canvas.style.height = `${height}px`;
 
   const context = canvas.getContext("2d");
-  if (!context) return;
+  if (!context) return canvas;
 
   const printBlack = "#111111";
   const printGray = "#555555";
@@ -333,6 +334,11 @@ function downloadReportPng(report: ScanReport): void {
     y = wrapCanvasText(context, signal.detail, 90, y + 32, 1180, 29) + 16;
   }
 
+  return canvas;
+}
+
+function downloadReportPng(report: ScanReport): void {
+  const canvas = generateReportCanvas(report);
   canvas.toBlob((blob) => {
     if (!blob) return;
     const url = URL.createObjectURL(blob);
@@ -342,6 +348,24 @@ function downloadReportPng(report: ScanReport): void {
     link.click();
     URL.revokeObjectURL(url);
   }, "image/png");
+}
+
+function downloadReportPdf(report: ScanReport): void {
+  const canvas = generateReportCanvas(report);
+  const imgData = canvas.toDataURL("image/png");
+  
+  // A4 size: 210mm x 297mm. Calculate scaled height for A4 width
+  const pdf = new jsPDF({
+    orientation: "portrait",
+    unit: "mm",
+    format: "a4"
+  });
+  
+  const pdfWidth = pdf.internal.pageSize.getWidth();
+  const pdfHeight = (canvas.height * pdfWidth) / canvas.width;
+  
+  pdf.addImage(imgData, "PNG", 0, 0, pdfWidth, pdfHeight);
+  pdf.save(`nezbig-report-${new Date(report.checkedAt).toISOString().slice(0, 10)}.pdf`);
 }
 
 function SignalCard({ signal, className = "" }: { signal: ScanReport["aiSignals"][number]; className?: string }) {
@@ -919,9 +943,12 @@ export default function App() {
               </div>
               <div className="report-actions">
                 <time dateTime={report.checkedAt}>{new Intl.DateTimeFormat("uk-UA", { dateStyle: "medium", timeStyle: "short" }).format(new Date(report.checkedAt))}</time>
-                <button type="button" className="secondary-button" onClick={() => downloadReportPng(report)}>
-                  Завантажити PNG
-                </button>
+                      <button className="button-secondary" type="button" onClick={() => downloadReportPdf(report)}>
+                        PDF
+                      </button>
+                      <button className="button-secondary" type="button" onClick={() => downloadReportPng(report)}>
+                        PNG
+                      </button>
               </div>
             </div>
 
