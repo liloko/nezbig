@@ -302,6 +302,57 @@ async function searchGoogleCustom(query: string, maxResults: number): Promise<Se
   return results;
 }
 
+async function searchWikipedia(query: string, maxResults: number): Promise<SearchCandidate[]> {
+  const key = cacheKey("wikipedia", query, maxResults);
+  const cached = await searchCache.get(key);
+  if (cached) return cached;
+
+  // For Wikipedia, we just use the most significant words as the search query
+  const plainQuery = query.replaceAll('"', "").trim();
+  if (plainQuery.length < 10) return [];
+
+  const url = new URL("https://uk.wikipedia.org/w/api.php");
+  url.searchParams.set("action", "query");
+  url.searchParams.set("list", "search");
+  url.searchParams.set("srsearch", plainQuery);
+  url.searchParams.set("format", "json");
+  url.searchParams.set("srlimit", String(Math.min(10, maxResults)));
+
+  try {
+    const response = await fetch(url, {
+      signal: withTimeout(SEARCH_TIMEOUT_MS),
+      headers: {
+        "user-agent": "Mozilla/5.0 Nezbig/1.0 (+local plagiarism checker)",
+        accept: "application/json"
+      }
+    });
+
+    if (!response.ok) return [];
+
+    const payload = await response.json() as { query?: { search?: Array<{ title?: string; snippet?: string; pageid?: number }> } };
+    
+    const results = (payload.query?.search ?? [])
+      .filter(item => item.title && item.snippet)
+      .slice(0, maxResults)
+      .map(item => {
+        // Wikipedia snippet has HTML tags like <span class="searchmatch">, we need to clean it
+        const cleanSnippet = item.snippet!.replace(/<[^>]+>/g, "");
+        return {
+          title: item.title! + " - Wikipedia",
+          url: `https://uk.wikipedia.org/wiki/?curid=${item.pageid}`,
+          snippet: normalizeWhitespace(cleanSnippet),
+          query,
+          provider: "Wikipedia"
+        };
+      });
+
+    await searchCache.set(key, results);
+    return results;
+  } catch {
+    return [];
+  }
+}
+
 async function searchBrave(query: string, maxResults: number): Promise<SearchCandidate[]> {
   const apiKey = process.env.BRAVE_SEARCH_API_KEY?.trim();
   if (!apiKey) return [];
@@ -552,6 +603,7 @@ export async function searchWebCandidatesDetailed(chunkText: string, maxResults 
 
   for (const query of queries) {
     tasks.push({ provider: "DuckDuckGo", run: () => searchDuckDuckGo(query, perQuery) });
+    tasks.push({ provider: "Wikipedia", run: () => searchWikipedia(query, Math.min(3, perQuery)) });
     if (googleConfigured) tasks.push({ provider: "Google", run: () => searchGoogleCustom(query, perQuery) });
     if (braveConfigured) tasks.push({ provider: "Brave", run: () => searchBrave(query, perQuery) });
     if (academicEnabled) {

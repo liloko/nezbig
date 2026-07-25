@@ -1,5 +1,5 @@
 import { ClipboardEvent, FormEvent, useEffect, useMemo, useRef, useState } from "react";
-import nezbigLogo from "./assets/nezbig-mark.png";
+import nezbigLogo from "./assets/nezbig-mark.jpg";
 import { insertRichHtmlAtSelection } from "./richPaste";
 import { htmlFromPlainText, plainTextFromRichHtml, sanitizeRichHtml } from "./richText";
 import { copyRichTextForWord } from "./wordClipboard";
