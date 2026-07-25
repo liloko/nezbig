@@ -387,3 +387,15 @@ app.post("/api/export-docx", upload.single("file"), async (request, response) =>
         response.status(400).json({ error: error instanceof Error ? error.message : "Не вдалося зібрати відредагований DOCX." });
     }
 });
+// Serve frontend in production (Docker / Local deployment)
+if (process.env.NODE_ENV === "production" && !process.env.VERCEL) {
+    const path = await import("path");
+    const { fileURLToPath } = await import("url");
+    const __dirname = path.dirname(fileURLToPath(import.meta.url));
+    const distPath = path.resolve(__dirname, "../../dist");
+    app.use(express.static(distPath));
+    // SPA fallback
+    app.get("*", (req, res) => {
+        res.sendFile(path.join(distPath, "index.html"));
+    });
+}
