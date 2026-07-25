@@ -412,7 +412,7 @@ if (process.env.NODE_ENV === "production" && !process.env.VERCEL) {
     const distPath = path.resolve(__dirname, "../../dist");
     app.use(express.static(distPath));
     // SPA fallback
-    app.get("*", (req, res) => {
+    app.use((req, res) => {
         res.sendFile(path.join(distPath, "index.html"));
     });
 }

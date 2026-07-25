@@ -9,6 +9,7 @@
     "dev:server": "tsx watch src/server/index.ts",
     "build": "npm run build:server && tsc --noEmit && vite build --configLoader runner",
     "build:server": "tsc -p tsconfig.server.json",
+    "start": "node --experimental-specifier-resolution=node .vercel-server/server/index.js",
     "test": "vitest run --configLoader runner",
     "preview": "vite preview --host 127.0.0.1 --configLoader runner",
     "lint": "eslint \"src/**/*.{ts,tsx}\"",
@@ -39,6 +40,7 @@
     "zod": "^4.4.3"
   },
   "devDependencies": {
+    "@playwright/test": "^1.62.0",
     "@testing-library/jest-dom": "^6.9.1",
     "@testing-library/react": "^16.3.1",
     "@types/cors": "^2.8.19",
