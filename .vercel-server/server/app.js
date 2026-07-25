@@ -3,7 +3,6 @@ import cors from "cors";
 import express from "express";
 import multer from "multer";
 import pino from "pino";
-import pinoHttp from "pino-http";
 import { rateLimit } from "express-rate-limit";
 import { ScanRequestSchema, ScanSettingsSchema, LlmOpinionRequestSchema, HumanizeRequestSchema } from "../shared/validation.js";
 import { scanJobCache } from "./jobStore.js";
@@ -19,7 +18,6 @@ import { decodeUploadFileName, extractTextFromUpload } from "./textExtraction.js
 import { hydrateSearchCandidatesDetailed, searchWebCandidatesDetailed } from "./webSearch.js";
 export const app = express();
 const logger = pino({ level: process.env.LOG_LEVEL || "info" });
-app.use(pinoHttp({ logger }));
 app.use(cors({
     origin: process.env.CLIENT_URL ?? "http://localhost:5173",
     methods: ["POST", "GET"]
@@ -243,7 +241,7 @@ app.post("/api/scan-file", fileLimiter, upload.single("file"), async (request, r
         const extracted = await extractTextFromUpload(request.file);
         const rawSettings = typeof request.body.settings === "string" ? JSON.parse(request.body.settings) : request.body.settings;
         const settings = ScanSettingsSchema.parse(rawSettings);
-        response.json(await runScan({ text: extracted.text, fileName: extracted.fileName, settings }, extracted.fileEvidence));
+        response.json(await runScan({ text: extracted.text, fileName: extracted.fileName, settings: settings }, extracted.fileEvidence));
     }
     catch (error) {
         response.status(400).json({ error: error instanceof Error ? error.message : "Не вдалося виконати файлову перевірку." });
@@ -258,7 +256,7 @@ app.post("/api/scan-file/jobs", fileLimiter, upload.single("file"), async (reque
         const extracted = await extractTextFromUpload(request.file);
         const rawSettings = typeof request.body.settings === "string" ? JSON.parse(request.body.settings) : request.body.settings;
         const settings = ScanSettingsSchema.parse(rawSettings);
-        const parsed = { text: extracted.text, fileName: extracted.fileName, settings };
+        const parsed = { text: extracted.text, fileName: extracted.fileName, settings: settings };
         const jobId = crypto.randomUUID();
         await scanJobCache.set(jobId, { id: jobId, status: "pending", createdAt: new Date().toISOString() });
         Promise.resolve().then(async () => {

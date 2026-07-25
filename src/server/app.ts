@@ -3,7 +3,6 @@ import cors from "cors";
 import express from "express";
 import multer from "multer";
 import pino from "pino";
-import pinoHttp from "pino-http";
 import { rateLimit } from "express-rate-limit";
 import { ScanRequestSchema, ScanSettingsSchema, LlmOpinionRequestSchema, HumanizeRequestSchema } from "../shared/validation.js";
 import { scanJobCache } from "./jobStore.js";
@@ -22,7 +21,6 @@ import type { FileEvidence, HumanizeRequest, LlmOpinionRequest, PlagiarismMatch,
 export const app = express();
 
 const logger = pino({ level: process.env.LOG_LEVEL || "info" });
-app.use(pinoHttp({ logger }));
 
 app.use(
   cors({
@@ -89,7 +87,7 @@ async function mapWithConcurrency<T, R>(items: T[], concurrency: number, worker:
     while (cursor < items.length) {
       const index = cursor;
       cursor += 1;
-      results[index] = await worker(items[index]);
+      results[index] = await worker(items[index] as T);
     }
   }
 
@@ -161,7 +159,7 @@ async function runScan(request: ScanRequest, fileEvidence?: FileEvidence): Promi
     hydrationTargets.length
   );
   searchDiagnostics = mergeSearchDiagnostics(searchDiagnostics, hydration.diagnostics);
-  const hydratedMatches = hydration.candidates.map((candidate, index) => scoreCandidate(hydrationTargets[index].chunkText, candidate, hydrationTargets[index].match.chunkIndex));
+  const hydratedMatches = hydration.candidates.map((candidate, index) => scoreCandidate(hydrationTargets[index]!.chunkText, candidate, hydrationTargets[index]!.match.chunkIndex));
   const allMatches = [...preliminaryMatches.map(({ match }) => match), ...hydratedMatches];
 
   const matches = uniqueMatches(allMatches)
@@ -227,7 +225,7 @@ app.post("/api/extract", upload.single("file"), async (request, response) => {
 app.post("/api/scan", scanLimiter, async (request, response) => {
   try {
     const parsed = ScanRequestSchema.parse(request.body);
-    response.json(await runScan(parsed));
+    response.json(await runScan(parsed as unknown as ScanRequest));
   } catch (error) {
     response.status(400).json({ error: error instanceof Error ? error.message : "Не вдалося виконати перевірку." });
   }
@@ -242,7 +240,7 @@ app.post("/api/scan/jobs", scanLimiter, async (request, response) => {
     Promise.resolve().then(async () => {
       try {
         await scanJobCache.set(jobId, { id: jobId, status: "processing", createdAt: new Date().toISOString() });
-        const report = await runScan(parsed);
+        const report = await runScan(parsed as unknown as ScanRequest);
         await scanJobCache.set(jobId, { id: jobId, status: "completed", result: report, createdAt: new Date().toISOString() });
       } catch (error) {
         logger.error(error);
@@ -279,7 +277,7 @@ app.post("/api/scan-file", fileLimiter, upload.single("file"), async (request, r
     const extracted = await extractTextFromUpload(request.file);
     const rawSettings = typeof request.body.settings === "string" ? JSON.parse(request.body.settings) : request.body.settings;
     const settings = ScanSettingsSchema.parse(rawSettings);
-    response.json(await runScan({ text: extracted.text, fileName: extracted.fileName, settings }, extracted.fileEvidence));
+    response.json(await runScan({ text: extracted.text, fileName: extracted.fileName, settings: settings as ScanSettings }, extracted.fileEvidence));
   } catch (error) {
     response.status(400).json({ error: error instanceof Error ? error.message : "Не вдалося виконати файлову перевірку." });
   }
@@ -294,7 +292,7 @@ app.post("/api/scan-file/jobs", fileLimiter, upload.single("file"), async (reque
     const extracted = await extractTextFromUpload(request.file);
     const rawSettings = typeof request.body.settings === "string" ? JSON.parse(request.body.settings) : request.body.settings;
     const settings = ScanSettingsSchema.parse(rawSettings);
-    const parsed = { text: extracted.text, fileName: extracted.fileName, settings };
+    const parsed = { text: extracted.text, fileName: extracted.fileName, settings: settings as ScanSettings };
 
     const jobId = crypto.randomUUID();
     await scanJobCache.set(jobId, { id: jobId, status: "pending", createdAt: new Date().toISOString() });
@@ -378,7 +376,7 @@ app.post("/api/humanize", scanLimiter, async (request, response) => {
     const result = humanizeText(body.text);
     response.json({
       ...result,
-      revisedHtml: body.html?.trim() ? mergeRevisedTextIntoHtml(body.html, result.revisedText) : undefined
+      revisedHtml: (body as any).html?.trim() ? mergeRevisedTextIntoHtml((body as any).html, result.revisedText) : undefined
     });
   } catch (error) {
     response.status(400).json({ error: error instanceof Error ? error.message : "Не вдалося олюднити текст." });
