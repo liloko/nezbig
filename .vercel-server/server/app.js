@@ -5,6 +5,7 @@ import multer from "multer";
 import pino from "pino";
 import { rateLimit } from "express-rate-limit";
 import { ScanRequestSchema, ScanSettingsSchema, LlmOpinionRequestSchema, HumanizeRequestSchema } from "../shared/validation.js";
+import { saveReport, getReport } from "./db.js";
 import { scanJobCache } from "./jobStore.js";
 import { chunkText, countWords } from "./chunking.js";
 import { prepareDocumentText } from "./documentPreprocess.js";
@@ -206,6 +207,8 @@ app.post("/api/scan/jobs", scanLimiter, async (request, response) => {
             try {
                 await scanJobCache.set(jobId, { id: jobId, status: "processing", createdAt: new Date().toISOString() });
                 const report = await runScan(parsed);
+                // Store report with jobId as history ID to avoid regenerating random UUIDs if possible, or use report.id
+                await saveReport(report.id, report);
                 await scanJobCache.set(jobId, { id: jobId, status: "completed", result: report, createdAt: new Date().toISOString() });
             }
             catch (error) {
@@ -230,6 +233,19 @@ app.get("/api/scan-status/:jobId", async (request, response) => {
     }
     catch (error) {
         response.status(500).json({ error: "Помилка сервера" });
+    }
+});
+app.get("/api/history/:id", async (request, response) => {
+    try {
+        const report = await getReport(request.params.id);
+        if (!report) {
+            response.status(404).json({ error: "Звіт не знайдено або він застарів" });
+            return;
+        }
+        response.json(report);
+    }
+    catch (error) {
+        response.status(500).json({ error: "Помилка при завантаженні історії" });
     }
 });
 app.post("/api/scan-file", fileLimiter, upload.single("file"), async (request, response) => {
@@ -263,6 +279,7 @@ app.post("/api/scan-file/jobs", fileLimiter, upload.single("file"), async (reque
             try {
                 await scanJobCache.set(jobId, { id: jobId, status: "processing", createdAt: new Date().toISOString() });
                 const report = await runScan(parsed, extracted.fileEvidence);
+                await saveReport(report.id, report);
                 await scanJobCache.set(jobId, { id: jobId, status: "completed", result: report, createdAt: new Date().toISOString() });
             }
             catch (error) {

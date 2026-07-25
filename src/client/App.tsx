@@ -117,32 +117,11 @@ function reportSummaryText(report: ScanReport): string {
   return `${report.summary} AI-думка показана окремо: ${report.aiOpinionProbability}%.`;
 }
 
-function confidenceLabel(value: "snippet" | "page"): string {
-  return value === "page" ? "сторінку прочитано" : "лише уривок пошуку";
-}
-
-function ProviderIcon({ provider, className }: { provider: string; className?: string }) {
-  let icon;
-  switch (provider.toLowerCase()) {
-    case "duckduckgo": icon = siDuckduckgo; break;
-    case "google": icon = siGoogle; break;
-    case "brave": icon = siBrave; break;
-    case "wikipedia": icon = siWikipedia; break;
-    case "semantic scholar": icon = siSemanticscholar; break;
-    default: return null;
-  }
-  return (
-    <svg className={className} role="img" viewBox="0 0 24 24" width="16" height="16" style={{ fill: "currentColor", display: "inline-block", verticalAlign: "middle", marginRight: "6px" }} xmlns="http://www.w3.org/2000/svg">
-      <path d={icon.path} />
-    </svg>
-  );
-}
-
-function providerDiagnosticLabel(provider: NonNullable<ScanReport["searchDiagnostics"]>["providers"][number]): string {
-  if (provider.attempted === 0) return provider.skippedReason?.startsWith("не налаштовано") ? "не підключено" : "пропущено";
-  if (provider.succeeded === 0) return "недоступний";
-  return `${provider.succeeded}/${provider.attempted} · ${provider.results} рез.`;
-}
+import { ProviderIcon } from "./components/ProviderIcon";
+import { SignalCard } from "./components/SignalCard";
+import { ProviderDiagnostics } from "./components/ProviderDiagnostics";
+import { PlagiarismMatches } from "./components/PlagiarismMatches";
+import { HumanizePanel } from "./components/HumanizePanel";
 
 function summarizeAiError(error: unknown): string {
   const message = error instanceof Error ? error.message : String(error);
@@ -368,36 +347,6 @@ function downloadReportPdf(report: ScanReport): void {
   pdf.save(`nezbig-report-${new Date(report.checkedAt).toISOString().slice(0, 10)}.pdf`);
 }
 
-function SignalCard({ signal, className = "" }: { signal: ScanReport["aiSignals"][number]; className?: string }) {
-  const isCritical = signal.score >= 50 && signal.category !== "safeguard";
-  const isSafeguard = signal.category === "safeguard";
-
-  return (
-    <article className={`signal ${className} ${isCritical ? "signal-critical" : ""} ${isSafeguard ? "signal-safeguard" : ""}`.trim()} key={signal.label}>
-      <div className="signal-header">
-        <div className="signal-title-group">
-          <span className="signal-icon" aria-hidden="true" />
-          <strong>{signal.label}</strong>
-        </div>
-        <span className="signal-score-badge">{signal.score}%</span>
-      </div>
-      <progress
-        value={signal.score}
-        max="100"
-        aria-label={`${signal.label}: ${signal.score}%`}
-        className={isCritical ? "progress-critical" : isSafeguard ? "progress-safeguard" : ""}
-      />
-      <p className="signal-detail">{signal.detail}</p>
-      {signal.evidence && signal.evidence.length > 0 ? (
-        <ul className="evidence-list">
-          {signal.evidence.map((item) => (
-            <li key={item}>{item}</li>
-          ))}
-        </ul>
-      ) : null}
-    </article>
-  );
-}
 
 export default function App() {
   const [text, setText] = useState("");
@@ -862,60 +811,14 @@ export default function App() {
         </form>
 
         {humanized ? (
-          <section className="humanizer-result" aria-labelledby="humanizer-title">
-            <div>
-              <p className="eyebrow">Редактор стилю</p>
-              <h2 id="humanizer-title">Відредагований текст</h2>
-              <p>
-                {formatNumber(humanized.originalWordCount)} -&gt; {formatNumber(humanized.revisedWordCount)} слів
-              </p>
-            </div>
-            <div
-              className="humanized-output rich-output"
-              dangerouslySetInnerHTML={{ __html: sanitizeRichHtml(humanized.revisedHtml ?? htmlFromPlainText(humanized.revisedText)) }}
-            />
-            <div className="humanizer-actions">
-              <button type="button" className="secondary-button" onClick={moveHumanizedTextToChecker}>
-                Перенести в перевірку
-              </button>
-              <button type="button" className="secondary-button" onClick={() => void copyHumanizedFormatted()}>
-                Копіювати у Word
-              </button>
-              <button type="button" className="secondary-button" disabled={wordDownloadBusy} onClick={() => void downloadHumanizedForWord()}>
-                {wordDownloadBusy ? "Збираю DOCX…" : selectedFile && /\.docx$/i.test(selectedFile.name) ? "Завантажити DOCX" : "Завантажити для Word"}
-              </button>
-              <span>Після перенесення перевірте факти й запустіть аналіз повторно.</span>
-            </div>
-            <div className="humanizer-grid">
-              <section>
-                <h3>Зміни</h3>
-                {humanized.changes.length === 0 ? (
-                  <p className="empty-state">Помітних AI-шаблонів не знайдено.</p>
-                ) : (
-                  <ul className="humanizer-list">
-                    {humanized.changes.map((change) => (
-                      <li key={change.label}>
-                        <strong>{change.label}</strong>
-                        <span>
-                          {change.count}x - {change.detail}
-                        </span>
-                      </li>
-                    ))}
-                  </ul>
-                )}
-              </section>
-              <section>
-                <h3>Примітки</h3>
-                <ul className="humanizer-list">
-                  {humanized.notes.map((note) => (
-                    <li key={note}>
-                      <span>{note}</span>
-                    </li>
-                  ))}
-                </ul>
-              </section>
-            </div>
-          </section>
+          <HumanizePanel
+            humanized={humanized}
+            wordDownloadBusy={wordDownloadBusy}
+            selectedFile={selectedFile}
+            onMoveToChecker={moveHumanizedTextToChecker}
+            onCopyFormatted={() => void copyHumanizedFormatted()}
+            onDownloadForWord={() => void downloadHumanizedForWord()}
+          />
         ) : null}
 
         {busy || llmBusy ? (
@@ -992,95 +895,13 @@ export default function App() {
 
             <div className="report-grid">
               <div className="report-left-stack">
-                <section className="source-panel" aria-labelledby="matches-title">
-                  <div className="section-heading-row">
-                    <h3 id="matches-title">Ймовірні джерела</h3>
-                    <span>{report.matches.length ? `${formatNumber(confirmedMatchCount)} підтвердж. · ${formatNumber(leadMatchCount)} підказ.` : "0 збігів"}</span>
-                  </div>
-                  {report.searchDiagnostics ? (
-                    <div className="provider-health" aria-label="Стан пошукових провайдерів">
-                      {report.searchDiagnostics.providers.map((provider) => (
-                        <span
-                          className={provider.succeeded === 0 ? "provider-health-issue" : ""}
-                          key={provider.provider}
-                          title={provider.skippedReason ?? `${provider.failed} помилок, ${provider.timedOut} timeout`}
-                        >
-                          <div className="provider-health-metric">
-                            <strong><ProviderIcon provider={provider.provider} /> {provider.provider}</strong>
-                            {providerDiagnosticLabel(provider)}
-                          </div>
-                        </span>
-                      ))}
-                      <span title="Сторінки, текст яких сервер зміг прочитати для підтвердження збігу">
-                        <strong>Сторінки</strong>
-                        {report.searchDiagnostics.pages.verified} підтвердж. · {report.searchDiagnostics.pages.unavailable} недоступ.
-                      </span>
-                    </div>
-                  ) : null}
-                  {report.matches.length === 0 ? (
-                    <p className={`empty-state compact-empty${allSearchProvidersFailed ? " search-failed-state" : ""}`}>
-                      {allSearchProvidersFailed
-                        ? "Вебпошук не завершено: доступні індекси не відповіли. Відсутність збігів не підтверджена."
-                        : "Сильних збігів у відкритих вебджерелах не знайдено."}
-                    </p>
-                  ) : (
-                    <div className="match-list">
-                      {report.matches.map((match) => (
-                        <article className="match-card" key={`${match.url}-${match.chunkIndex}`}>
-                          <div className="match-score">
-                            <strong>{match.score}%</strong>
-                            <span>Фрагмент {match.chunkIndex + 1}</span>
-                          </div>
-                          <h4>
-                            <a href={match.url} target="_blank" rel="noreferrer">
-                              {match.title}
-                            </a>
-                          </h4>
-                          <p>{match.snippet}</p>
-                          {match.confidence === "page" && match.submittedEvidence ? (
-                            <div className="match-evidence">
-                              <strong>Підтверджений спільний уривок</strong>
-                              <blockquote>{match.submittedEvidence}</blockquote>
-                              {match.sourceEvidence && match.sourceEvidence !== match.submittedEvidence ? <blockquote>{match.sourceEvidence}</blockquote> : null}
-                            </div>
-                          ) : (
-                            <p className="match-lead-note">Пошукова підказка: сторінку ще не підтверджено, тому цей результат не впливає на загальний відсоток плагіату.</p>
-                          )}
-                          <dl>
-                            <div>
-                              <dt>Слова</dt>
-                              <dd>{match.overlapPercent}%</dd>
-                            </div>
-                            <div>
-                              <dt>N-грам</dt>
-                              <dd>{match.ngramOverlapPercent}%</dd>
-                            </div>
-                            <div>
-                              <dt>Довгий збіг</dt>
-                              <dd>{match.longestRun} слів</dd>
-                            </div>
-                            <div>
-                              <dt>Winnowing</dt>
-                              <dd>{match.hashOverlapPercent}%</dd>
-                            </div>
-                            <div>
-                              <dt>Full-text</dt>
-                              <dd>{match.fullTextRank}%</dd>
-                            </div>
-                            <div>
-                              <dt>Доказ</dt>
-                              <dd>{confidenceLabel(match.confidence)}</dd>
-                            </div>
-                            <div>
-                              <dt>Джерело:</dt>
-                              <dd><ProviderIcon provider={match.provider ?? ""} /> {match.provider ?? "Web"}</dd>
-                            </div>
-                          </dl>
-                        </article>
-                      ))}
-                    </div>
-                  )}
-                </section>
+                <PlagiarismMatches
+                  matches={report.matches}
+                  confirmedMatchCount={confirmedMatchCount}
+                  leadMatchCount={leadMatchCount}
+                  allSearchProvidersFailed={allSearchProvidersFailed}
+                  diagnosticsNode={report.searchDiagnostics ? <ProviderDiagnostics diagnostics={report.searchDiagnostics} /> : null}
+                />
 
                 {report.aiSuspiciousSegments.length > 0 ? (
                   <section className="segment-panel" aria-labelledby="segments-title">
