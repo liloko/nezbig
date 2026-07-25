@@ -1,10 +1,31 @@
 import { normalizeWhitespace } from "./chunking.js";
 import { detectAiLanguageCoverage } from "./aiLanguage.js";
 import { prepareAiAnalysisText } from "./aiTextPreprocess.js";
-import { tokenize, splitSentences, clampScore, coefficientOfVariation, countRegexMatches, sampleEvidence, } from "./utils/textUtils.js";
+import { tokenize, splitSentences, clampScore, coefficientOfVariation, countRegexMatches, sampleEvidence } from "./utils/textUtils.js";
+export const AI_SCORING_WEIGHTS = {
+    statistical: 0.38,
+    pattern: 0.42,
+    structure: 0.2
+};
 const TRANSITIONS = new Set([
-    "therefore", "however", "moreover", "furthermore", "additionally", "consequently", "overall",
-    "важливо", "отже", "проте", "однак", "таким", "загалом", "водночас", "натомість", "по-перше", "по-друге", "насамкінець"
+    "therefore",
+    "however",
+    "moreover",
+    "furthermore",
+    "additionally",
+    "consequently",
+    "overall",
+    "важливо",
+    "отже",
+    "проте",
+    "однак",
+    "таким",
+    "загалом",
+    "водночас",
+    "натомість",
+    "по-перше",
+    "по-друге",
+    "насамкінець"
 ]);
 const HEDGES = new Set(["may", "might", "could", "typically", "often", "може", "ймовірно", "зазвичай", "часто", "можливо", "потенційно"]);
 const AI_PATTERN_GROUPS = [
@@ -81,9 +102,7 @@ function isSectionHeading(sentence) {
     return /^(?:зміст|вступ|висновки|список використаних джерел|розділ\s+(?:[0-9]+|[ivx]+)(?:\s+.+)?|introduction|conclusion|references|chapter\s+(?:[0-9]+|[ivx]+)(?:\s+.+)?)$/iu.test(normalized);
 }
 function sentenceStartRepetition(sentences) {
-    const starts = sentences
-        .map((sentence) => tokenize(sentence, true).slice(0, 3).join(" "))
-        .filter((start) => start.length > 4);
+    const starts = sentences.map((sentence) => tokenize(sentence, true).slice(0, 3).join(" ")).filter((start) => start.length > 4);
     const counts = new Map();
     for (const start of starts)
         counts.set(start, (counts.get(start) ?? 0) + 1);
@@ -123,7 +142,13 @@ function safeguardScore(normalized, wordCount, placeholderText, academicStructur
         placeholderText ? "lorem ipsum / шаблонний наповнювач" : "",
         academicStructure ? "академічна структура: вступ, розділи або висновки не вважаються AI-ознакою" : ""
     ].filter(Boolean);
-    const score = clampScore(citations.length * 12 + Math.min(20, numbers.length * 2.5) + Math.min(15, firstPerson.length * 3.5) + quotes.length * 10 + (wordCount < 180 ? 15 : 0) + (placeholderText ? 85 : 0) + (academicStructure ? 25 : 0));
+    const score = clampScore(citations.length * 12 +
+        Math.min(20, numbers.length * 2.5) +
+        Math.min(15, firstPerson.length * 3.5) +
+        quotes.length * 10 +
+        (wordCount < 180 ? 15 : 0) +
+        (placeholderText ? 85 : 0) +
+        (academicStructure ? 25 : 0));
     return { score, evidence };
 }
 function movingAverageTypeTokenRatio(tokens, windowSize = 50) {
@@ -185,9 +210,7 @@ function analyzeSinglePass(text) {
             score,
             category: group.category,
             evidence: sampleEvidence(matches),
-            detail: matches.length > 0
-                ? `Знайдено ${matches.length} маркерів. Вони часто зустрічаються у згенерованих текстах.`
-                : "Явних маркерів цієї групи не знайдено.",
+            detail: matches.length > 0 ? `Знайдено ${matches.length} маркерів. Вони часто зустрічаються у згенерованих текстах.` : "Явних маркерів цієї групи не знайдено.",
             weight: group.weight
         };
     });
@@ -216,7 +239,9 @@ function analyzeSinglePass(text) {
             label: "Часті формальні переходи",
             score: transitionScore,
             category: "pattern",
-            detail: transitionScore >= 40 ? "Висока концентрація слів-зв'язок (тому, однак, крім того), що часто використовуються мовними моделями для логічної 'склейки'." : "Перехідні слова у нормі.",
+            detail: transitionScore >= 40
+                ? "Висока концентрація слів-зв'язок (тому, однак, крім того), що часто використовуються мовними моделями для логічної 'склейки'."
+                : "Перехідні слова у нормі.",
             evidence: sampleEvidence(words.filter((word) => TRANSITIONS.has(word))),
             weight: 0.85
         },
@@ -240,7 +265,9 @@ function analyzeSinglePass(text) {
             label: "Безособовий стиль",
             score: impersonalVoice.score,
             category: "pattern",
-            detail: impersonalVoice.score >= 45 ? "Стиль написання відсторонений та надто об'єктивізований. Хоча це типово для науки, надмірна кількість таких слів — маркер ШІ." : "Стиль подачі не виглядає шаблонно-академічним.",
+            detail: impersonalVoice.score >= 45
+                ? "Стиль написання відсторонений та надто об'єктивізований. Хоча це типово для науки, надмірна кількість таких слів — маркер ШІ."
+                : "Стиль подачі не виглядає шаблонно-академічним.",
             evidence: impersonalVoice.evidence,
             weight: 0.95
         },
@@ -248,7 +275,9 @@ function analyzeSinglePass(text) {
             label: "Одноманітна пунктуація",
             score: punctuationScore,
             category: "structure",
-            detail: punctuationScore >= 25 ? "Пунктуація надто проста або рівна. Людські автори частіше використовують дужки, крапки з комою, тире або окличні знаки (подвійні дефіси не рахуються)." : "Пунктуаційний малюнок не виглядає шаблонним.",
+            detail: punctuationScore >= 25
+                ? "Пунктуація надто проста або рівна. Людські автори частіше використовують дужки, крапки з комою, тире або окличні знаки (подвійні дефіси не рахуються)."
+                : "Пунктуаційний малюнок не виглядає шаблонним.",
             evidence: punctuationTypes.size ? [`${punctuationTypes.size} типів пунктуації`] : [],
             weight: 0.5
         },
@@ -260,7 +289,7 @@ function analyzeSinglePass(text) {
     const patternChannel = strongestChannelScore(signalDrafts, "pattern");
     const structureChannel = strongestChannelScore(signalDrafts, "structure");
     const activeChannels = [statisticalChannel, patternChannel, structureChannel].filter((score) => score >= 14).length;
-    const weightedRaw = statisticalChannel * 0.38 + patternChannel * 0.42 + structureChannel * 0.2;
+    const weightedRaw = statisticalChannel * AI_SCORING_WEIGHTS.statistical + patternChannel * AI_SCORING_WEIGHTS.pattern + structureChannel * AI_SCORING_WEIGHTS.structure;
     const corroboration = activeChannels >= 3 ? 1.1 : activeChannels === 2 ? 1 : 0.78;
     const lengthAdjust = wordCount < 60 ? 0.6 : wordCount < 120 ? 0.8 : wordCount < 200 ? 0.95 : 1.0;
     let rawProbability = weightedRaw * corroboration * lengthAdjust;
@@ -272,15 +301,7 @@ function analyzeSinglePass(text) {
         .sort((left, right) => right - left)
         .slice(0, 3)
         .reduce((sum, score, _index, scores) => sum + score / Math.max(1, scores.length), 0);
-    const evidenceFloor = promptLeak >= 40
-        ? 45
-        : evidenceSignals.length >= 3
-            ? Math.max(22, strongAverage * 0.5)
-            : weakEvidenceSignals.length >= 5
-                ? 12
-                : weakEvidenceSignals.length >= 2
-                    ? 5
-                    : 0;
+    const evidenceFloor = promptLeak >= 40 ? 45 : evidenceSignals.length >= 3 ? Math.max(22, strongAverage * 0.5) : weakEvidenceSignals.length >= 5 ? 12 : weakEvidenceSignals.length >= 2 ? 5 : 0;
     const probability = clampScore(placeholderText ? Math.min(10, weightedRaw) : Math.max(rawProbability, corroboratedFloor, evidenceFloor));
     const signals = signalDrafts
         .map(({ weight: _weight, ...signal }) => signal)
@@ -435,11 +456,7 @@ export function detectAiSignals(rawText) {
     const suspiciousCoverage = suspiciousWindows / windowScores.length;
     const topScores = [...windowScores].sort((left, right) => right - left).slice(0, Math.min(3, windowScores.length));
     const topAverage = topScores.reduce((sum, score) => sum + score, 0) / Math.max(1, topScores.length);
-    const ensembleScore = documentResult.probability * 0.36 +
-        median * 0.14 +
-        upperQuartile * 0.2 +
-        topAverage * 0.22 +
-        suspiciousCoverage * 100 * 0.08;
+    const ensembleScore = documentResult.probability * 0.36 + median * 0.14 + upperQuartile * 0.2 + topAverage * 0.22 + suspiciousCoverage * 100 * 0.08;
     const localizedFloor = strongest >= 35 ? strongest * 0.56 : topAverage >= 24 ? topAverage * 0.48 : 0;
     const probability = clampScore(Math.max(ensembleScore, localizedFloor));
     const segmentSignal = {

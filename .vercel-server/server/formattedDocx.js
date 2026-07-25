@@ -8,7 +8,9 @@ function wordElements($, name, root) {
     return nodes.filter((node) => node.type === "tag");
 }
 function paragraphText($, paragraph) {
-    return wordElements($, "w:t", paragraph).map((element) => $(element).text()).join("");
+    return wordElements($, "w:t", paragraph)
+        .map((element) => $(element).text())
+        .join("");
 }
 function splitRevisedParagraphs(value) {
     return value

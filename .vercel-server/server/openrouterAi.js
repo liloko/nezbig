@@ -2,17 +2,13 @@ import { normalizeWhitespace } from "./chunking.js";
 const OPENROUTER_URL = "https://openrouter.ai/api/v1/chat/completions";
 const MAX_ANALYSIS_CHARS = 18000;
 const OPENROUTER_TIMEOUT_MS = 24_000;
-const FALLBACK_MODELS = [
-    "openrouter/owl-alpha",
-    "nvidia/nemotron-3-super-120b-a12b:free",
-    "openai/gpt-oss-120b:free",
-    "deepseek/deepseek-v4-flash:free",
-    "z-ai/glm-4.5-air:free"
-];
+const FALLBACK_MODELS = ["openrouter/owl-alpha", "nvidia/nemotron-3-super-120b-a12b:free", "openai/gpt-oss-120b:free", "deepseek/deepseek-v4-flash:free", "z-ai/glm-4.5-air:free"];
 function getOpenRouterConfig() {
     const apiKey = process.env.OPENROUTER_API_KEY?.trim();
     const primaryModel = process.env.OPENROUTER_MODEL?.trim();
-    const envFallbacks = process.env.OPENROUTER_FALLBACK_MODELS?.split(",").map((model) => model.trim()).filter(Boolean) ?? [];
+    const envFallbacks = process.env.OPENROUTER_FALLBACK_MODELS?.split(",")
+        .map((model) => model.trim())
+        .filter(Boolean) ?? [];
     const models = [...new Set([primaryModel, ...envFallbacks, ...FALLBACK_MODELS].filter(Boolean))];
     if (!apiKey || models.length === 0)
         return null;
@@ -41,9 +37,7 @@ function withTimeout(ms) {
 }
 function parseAiResult(content, model, attemptedModels) {
     const parsed = extractJsonObject(content);
-    const signals = (Array.isArray(parsed.signals) ? parsed.signals : [])
-        .slice(0, 6)
-        .map((signal) => ({
+    const signals = (Array.isArray(parsed.signals) ? parsed.signals : []).slice(0, 6).map((signal) => ({
         label: String(signal.label || "OpenRouter Signal").slice(0, 80),
         score: asScore(signal.score),
         detail: String(signal.detail || "Model identified this as a relevant authorship signal.").slice(0, 280),

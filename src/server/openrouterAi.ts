@@ -35,18 +35,15 @@ type OpenRouterResponse = {
 const OPENROUTER_URL = "https://openrouter.ai/api/v1/chat/completions";
 const MAX_ANALYSIS_CHARS = 18000;
 const OPENROUTER_TIMEOUT_MS = 24_000;
-const FALLBACK_MODELS = [
-  "openrouter/owl-alpha",
-  "nvidia/nemotron-3-super-120b-a12b:free",
-  "openai/gpt-oss-120b:free",
-  "deepseek/deepseek-v4-flash:free",
-  "z-ai/glm-4.5-air:free"
-];
+const FALLBACK_MODELS = ["openrouter/owl-alpha", "nvidia/nemotron-3-super-120b-a12b:free", "openai/gpt-oss-120b:free", "deepseek/deepseek-v4-flash:free", "z-ai/glm-4.5-air:free"];
 
 function getOpenRouterConfig(): { apiKey: string; models: string[] } | null {
   const apiKey = process.env.OPENROUTER_API_KEY?.trim();
   const primaryModel = process.env.OPENROUTER_MODEL?.trim();
-  const envFallbacks = process.env.OPENROUTER_FALLBACK_MODELS?.split(",").map((model) => model.trim()).filter(Boolean) ?? [];
+  const envFallbacks =
+    process.env.OPENROUTER_FALLBACK_MODELS?.split(",")
+      .map((model) => model.trim())
+      .filter(Boolean) ?? [];
   const models = [...new Set([primaryModel, ...envFallbacks, ...FALLBACK_MODELS].filter(Boolean) as string[])];
 
   if (!apiKey || models.length === 0) return null;
@@ -89,15 +86,13 @@ function parseAiResult(content: string, model: string, attemptedModels: string[]
     }>;
   };
 
-  const signals = (Array.isArray(parsed.signals) ? parsed.signals : [])
-    .slice(0, 6)
-    .map((signal): AiSignal => ({
-      label: String(signal.label || "OpenRouter Signal").slice(0, 80),
-      score: asScore(signal.score),
-      detail: String(signal.detail || "Model identified this as a relevant authorship signal.").slice(0, 280),
-      category: "pattern",
-      evidence: Array.isArray(signal.evidence) ? signal.evidence.map((item) => String(item).slice(0, 140)).slice(0, 4) : []
-    }));
+  const signals = (Array.isArray(parsed.signals) ? parsed.signals : []).slice(0, 6).map((signal): AiSignal => ({
+    label: String(signal.label || "OpenRouter Signal").slice(0, 80),
+    score: asScore(signal.score),
+    detail: String(signal.detail || "Model identified this as a relevant authorship signal.").slice(0, 280),
+    category: "pattern",
+    evidence: Array.isArray(signal.evidence) ? signal.evidence.map((item) => String(item).slice(0, 140)).slice(0, 4) : []
+  }));
 
   return {
     provider: "openrouter",

@@ -12,7 +12,9 @@ function wordElements($: CheerioAPI, name: string, root?: Element): Element[] {
 }
 
 function paragraphText($: CheerioAPI, paragraph: Element): string {
-  return wordElements($, "w:t", paragraph).map((element) => $(element).text()).join("");
+  return wordElements($, "w:t", paragraph)
+    .map((element) => $(element).text())
+    .join("");
 }
 
 function splitRevisedParagraphs(value: string): string[] {
@@ -25,7 +27,10 @@ function splitRevisedParagraphs(value: string): string[] {
 function replaceParagraphText($: CheerioAPI, paragraph: Element, revisedText: string): void {
   const runs = wordElements($, "w:t", paragraph);
   if (runs.length === 0) return;
-  const values = distributeRevisedText(runs.map((run) => $(run).text()), revisedText);
+  const values = distributeRevisedText(
+    runs.map((run) => $(run).text()),
+    revisedText
+  );
   runs.forEach((run, index) => {
     const value = values[index] ?? "";
     $(run).text(value);

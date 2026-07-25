@@ -2,15 +2,15 @@ import * as cheerio from "cheerio";
 import { excerptForSearch, normalizeWhitespace } from "./chunking.js";
 import { ProviderCircuitBreaker } from "./providerCircuitBreaker.js";
 import { ProviderTaskScheduler } from "./providerTaskScheduler.js";
-import { MemoryTtlCache } from "./searchCache.js";
+import { DistributedCache } from "./searchCache.js";
 import { emptySearchDiagnostics, mergeSearchDiagnostics } from "./searchDiagnostics.js";
 import type { SearchCandidate, SearchDiagnostics, SearchProviderDiagnostic } from "../shared/types.js";
 
 const SEARCH_TIMEOUT_MS = 9000;
 const PAGE_TIMEOUT_MS = 8500;
 const MAX_PAGE_CHARS = 120_000;
-const searchCache = new MemoryTtlCache<SearchCandidate[]>(1000 * 60 * 30, 500);
-const pageCache = new MemoryTtlCache<string | undefined>(1000 * 60 * 60, 500);
+const searchCache = new DistributedCache<SearchCandidate[]>("search", 1000 * 60 * 30, 500);
+const pageCache = new DistributedCache<string>("page", 1000 * 60 * 60, 500);
 const providerCircuit = new ProviderCircuitBreaker(3, 60_000);
 const providerScheduler = new ProviderTaskScheduler(3);
 
@@ -148,63 +148,110 @@ export function buildSearchQueries(chunkText: string, deep: boolean): string[] {
     .slice(0, deep ? 4 : 2)
     .map(({ phrase }) => `"${phrase}"`);
 
-  const keywordQuery = [...new Set(words
-    .map((word) => word.replace(/[^\p{L}\p{N}'-]/gu, ""))
-    .filter((word) => word.length >= 7 || /\d/.test(word)))]
+  const keywordQuery = [...new Set(words.map((word) => word.replace(/[^\p{L}\p{N}'-]/gu, "")).filter((word) => word.length >= 7 || /\d/.test(word)))]
     .sort((a, b) => b.length - a.length)
     .slice(0, deep ? 12 : 9)
     .join(" ");
   const fallback = excerptForSearch(chunkText);
-  const queries = [...exactQueries, keywordQuery, `"${fallback}"`]
-    .filter((query) => query.replaceAll('"', "").trim().length > 20);
+  const queries = [...exactQueries, keywordQuery, `"${fallback}"`].filter((query) => query.replaceAll('"', "").trim().length > 20);
 
   return [...new Set(queries)];
 }
 
 async function searchDuckDuckGo(query: string, maxResults: number): Promise<SearchCandidate[]> {
   const key = cacheKey("duckduckgo", query, maxResults);
-  const cached = searchCache.get(key);
+  const cached = await searchCache.get(key);
   if (cached) return cached;
 
-  const url = new URL("https://duckduckgo.com/html/");
-  url.searchParams.set("q", query);
+  const runSearxngFallback = async (): Promise<SearchCandidate[]> => {
+    const searxngUrl = process.env.SEARXNG_URL;
+    if (!searxngUrl) return [];
 
-  const response = await fetch(url, {
-    signal: withTimeout(SEARCH_TIMEOUT_MS),
-    headers: {
-      "user-agent": "Mozilla/5.0 Nezbig/1.0 (+local plagiarism checker)",
-      accept: "text/html,application/xhtml+xml"
+    const url = new URL(`${searxngUrl}/search`);
+    url.searchParams.set("q", query);
+    url.searchParams.set("format", "json");
+
+    try {
+      const response = await fetch(url, { signal: withTimeout(SEARCH_TIMEOUT_MS) });
+      if (!response.ok) return [];
+
+      const data = (await response.json()) as { results?: Array<{ title?: string; url?: string; content?: string }> };
+      return (data.results || [])
+        .filter((r) => r.title && r.url && r.content)
+        .slice(0, maxResults)
+        .map((r) => ({
+          title: normalizeWhitespace(r.title!),
+          url: r.url!,
+          snippet: normalizeWhitespace(r.content!),
+          query,
+          provider: "DuckDuckGo (SearXNG Fallback)"
+        }));
+    } catch {
+      return [];
     }
-  });
+  };
 
-  if (!response.ok) {
-    throw new Error(`Пошук тимчасово недоступний: HTTP ${response.status}.`);
+  try {
+    const url = new URL("https://duckduckgo.com/html/");
+    url.searchParams.set("q", query);
+
+    const response = await fetch(url, {
+      signal: withTimeout(SEARCH_TIMEOUT_MS),
+      headers: {
+        "user-agent": "Mozilla/5.0 Nezbig/1.0 (+local plagiarism checker)",
+        accept: "text/html,application/xhtml+xml"
+      }
+    });
+
+    if (!response.ok) {
+      const fallback = await runSearxngFallback();
+      if (fallback.length > 0) {
+        await searchCache.set(key, fallback);
+        return fallback;
+      }
+      throw new Error(`Пошук тимчасово недоступний: HTTP ${response.status}.`);
+    }
+
+    const html = await response.text();
+    const $ = cheerio.load(html);
+    const candidates: SearchCandidate[] = [];
+
+    $(".result").each((_, element) => {
+      const titleElement = $(element).find(".result__title a").first();
+      const title = normalizeWhitespace(titleElement.text());
+      const href = titleElement.attr("href");
+      const snippet = normalizeWhitespace($(element).find(".result__snippet").text());
+
+      if (title && href && snippet) {
+        candidates.push({
+          title,
+          url: decodeDuckDuckGoUrl(href),
+          snippet,
+          query,
+          provider: "DuckDuckGo"
+        });
+      }
+    });
+
+    if (candidates.length === 0) {
+      const fallback = await runSearxngFallback();
+      if (fallback.length > 0) {
+        await searchCache.set(key, fallback);
+        return fallback;
+      }
+    }
+
+    const results = candidates.slice(0, maxResults);
+    await searchCache.set(key, results);
+    return results;
+  } catch (error) {
+    const fallback = await runSearxngFallback();
+    if (fallback.length > 0) {
+      await searchCache.set(key, fallback);
+      return fallback;
+    }
+    throw error;
   }
-
-  const html = await response.text();
-  const $ = cheerio.load(html);
-  const candidates: SearchCandidate[] = [];
-
-  $(".result").each((_, element) => {
-    const titleElement = $(element).find(".result__title a").first();
-    const title = normalizeWhitespace(titleElement.text());
-    const href = titleElement.attr("href");
-    const snippet = normalizeWhitespace($(element).find(".result__snippet").text());
-
-    if (title && href && snippet) {
-      candidates.push({
-        title,
-        url: decodeDuckDuckGoUrl(href),
-        snippet,
-        query,
-        provider: "DuckDuckGo"
-      });
-    }
-  });
-
-  const results = candidates.slice(0, maxResults);
-  searchCache.set(key, results);
-  return results;
 }
 
 async function searchGoogleCustom(query: string, maxResults: number): Promise<SearchCandidate[]> {
@@ -213,7 +260,7 @@ async function searchGoogleCustom(query: string, maxResults: number): Promise<Se
   if (!apiKey || !cx) return [];
 
   const key = cacheKey("google", query, maxResults);
-  const cached = searchCache.get(key);
+  const cached = await searchCache.get(key);
   if (cached) return cached;
 
   const url = new URL("https://www.googleapis.com/customsearch/v1");
@@ -251,7 +298,7 @@ async function searchGoogleCustom(query: string, maxResults: number): Promise<Se
       provider: "Google"
     }));
 
-  searchCache.set(key, results);
+  await searchCache.set(key, results);
   return results;
 }
 
@@ -260,7 +307,7 @@ async function searchBrave(query: string, maxResults: number): Promise<SearchCan
   if (!apiKey) return [];
 
   const key = cacheKey("brave", query, maxResults);
-  const cached = searchCache.get(key);
+  const cached = await searchCache.get(key);
   if (cached) return cached;
 
   const url = new URL("https://api.search.brave.com/res/v1/web/search");
@@ -299,13 +346,13 @@ async function searchBrave(query: string, maxResults: number): Promise<SearchCan
       provider: "Brave"
     }));
 
-  searchCache.set(key, results);
+  await searchCache.set(key, results);
   return results;
 }
 
 async function searchSemanticScholar(query: string, maxResults: number): Promise<SearchCandidate[]> {
   const key = cacheKey("semantic-scholar", query, maxResults);
-  const cached = searchCache.get(key);
+  const cached = await searchCache.get(key);
   if (cached) return cached;
 
   const plainQuery = query.replaceAll('"', "").trim();
@@ -340,12 +387,16 @@ async function searchSemanticScholar(query: string, maxResults: number): Promise
     .filter((paper) => paper.title && paper.url && paper.abstract)
     .slice(0, maxResults)
     .map((paper): SearchCandidate => {
-      const authors = paper.authors?.slice(0, 2).map((author) => author.name).filter(Boolean).join(", ");
+      const authors = paper.authors
+        ?.slice(0, 2)
+        .map((author) => author.name)
+        .filter(Boolean)
+        .join(", ");
       const meta = [authors, paper.year].filter(Boolean).join(", ");
       return {
         title: normalizeWhitespace(paper.title ?? ""),
         url: paper.url ?? "",
-        snippet: normalizeWhitespace(meta ? `${meta}. ${paper.abstract}` : paper.abstract ?? ""),
+        snippet: normalizeWhitespace(meta ? `${meta}. ${paper.abstract}` : (paper.abstract ?? "")),
         query,
         provider: "Semantic Scholar",
         sourceText: normalizeWhitespace(paper.abstract ?? ""),
@@ -353,17 +404,20 @@ async function searchSemanticScholar(query: string, maxResults: number): Promise
       };
     });
 
-  searchCache.set(key, results);
+  await searchCache.set(key, results);
   return results;
 }
 
 export function abstractFromInvertedIndex(index?: Record<string, number[]> | null): string | undefined {
   if (!index) return undefined;
-  const positioned = Object.entries(index).flatMap(([word, positions]) =>
-    positions.map((position) => ({ word, position }))
-  );
+  const positioned = Object.entries(index).flatMap(([word, positions]) => positions.map((position) => ({ word, position })));
   if (positioned.length === 0) return undefined;
-  return normalizeWhitespace(positioned.sort((a, b) => a.position - b.position).map(({ word }) => word).join(" "));
+  return normalizeWhitespace(
+    positioned
+      .sort((a, b) => a.position - b.position)
+      .map(({ word }) => word)
+      .join(" ")
+  );
 }
 
 async function searchOpenAlex(query: string, maxResults: number): Promise<SearchCandidate[]> {
@@ -371,7 +425,7 @@ async function searchOpenAlex(query: string, maxResults: number): Promise<Search
   if (!apiKey) return [];
 
   const key = cacheKey("openalex", query, maxResults);
-  const cached = searchCache.get(key);
+  const cached = await searchCache.get(key);
   if (cached) return cached;
 
   const plainQuery = query.replaceAll('"', "").trim();
@@ -405,38 +459,46 @@ async function searchOpenAlex(query: string, maxResults: number): Promise<Search
     }>;
   };
 
-  const results = (payload.results ?? []).flatMap((work): SearchCandidate[] => {
-    const title = normalizeWhitespace(work.display_name ?? "");
-    const abstract = abstractFromInvertedIndex(work.abstract_inverted_index);
-    const url = work.doi ?? work.best_oa_location?.landing_page_url ?? work.primary_location?.landing_page_url ?? work.id ?? "";
-    if (!title || !url || !abstract) return [];
-    const authors = work.authorships?.slice(0, 3).map((authorship) => authorship.author?.display_name).filter(Boolean).join(", ");
-    const metadata = [authors, work.publication_year].filter(Boolean).join(", ");
-    return [{
-      title,
-      url,
-      snippet: normalizeWhitespace(metadata ? `${metadata}. ${abstract}` : abstract),
-      query,
-      provider: "OpenAlex",
-      sourceText: abstract,
-      verifiedTextLength: abstract.length
-    }];
-  }).slice(0, maxResults);
+  const results = (payload.results ?? [])
+    .flatMap((work): SearchCandidate[] => {
+      const title = normalizeWhitespace(work.display_name ?? "");
+      const abstract = abstractFromInvertedIndex(work.abstract_inverted_index);
+      const url = work.doi ?? work.best_oa_location?.landing_page_url ?? work.primary_location?.landing_page_url ?? work.id ?? "";
+      if (!title || !url || !abstract) return [];
+      const authors = work.authorships
+        ?.slice(0, 3)
+        .map((authorship) => authorship.author?.display_name)
+        .filter(Boolean)
+        .join(", ");
+      const metadata = [authors, work.publication_year].filter(Boolean).join(", ");
+      return [
+        {
+          title,
+          url,
+          snippet: normalizeWhitespace(metadata ? `${metadata}. ${abstract}` : abstract),
+          query,
+          provider: "OpenAlex",
+          sourceText: abstract,
+          verifiedTextLength: abstract.length
+        }
+      ];
+    })
+    .slice(0, maxResults);
 
-  searchCache.set(key, results);
+  await searchCache.set(key, results);
   return results;
 }
 
 async function fetchReadablePageText(url: string): Promise<PageReadResult> {
-  if (pageCache.has(url)) {
-    const text = pageCache.get(url);
-    return { text, attempted: false, cacheHit: text !== undefined, negativeCacheHit: text === undefined };
+  const cached = await pageCache.get(url);
+  if (cached !== undefined) {
+    return { text: cached === null ? undefined : cached, attempted: false, cacheHit: cached !== null, negativeCacheHit: cached === null };
   }
 
   try {
     const parsed = new URL(url);
     if (!["http:", "https:"].includes(parsed.protocol)) {
-      pageCache.set(url, undefined);
+      await pageCache.set(url, null);
       return { attempted: false, cacheHit: false, negativeCacheHit: false };
     }
 
@@ -450,30 +512,30 @@ async function fetchReadablePageText(url: string): Promise<PageReadResult> {
     });
 
     if (!response.ok) {
-      pageCache.set(url, undefined);
+      await pageCache.set(url, null);
       return { attempted: true, cacheHit: false, negativeCacheHit: false };
     }
     const contentType = response.headers.get("content-type") ?? "";
     if (!/text\/html|text\/plain|application\/xhtml\+xml/i.test(contentType)) {
-      pageCache.set(url, undefined);
+      await pageCache.set(url, null);
       return { attempted: true, cacheHit: false, negativeCacheHit: false };
     }
 
     const raw = (await response.text()).slice(0, MAX_PAGE_CHARS);
     if (/text\/plain/i.test(contentType)) {
       const plain = normalizeWhitespace(raw).slice(0, MAX_PAGE_CHARS);
-      pageCache.set(url, plain);
+      await pageCache.set(url, plain);
       return { text: plain, attempted: true, cacheHit: false, negativeCacheHit: false };
     }
 
     const $ = cheerio.load(raw);
     $("script, style, noscript, svg, iframe, nav, header, footer, form").remove();
     const text = normalizeWhitespace($("article, main, body").text());
-    const readable = text.length > 160 ? text.slice(0, MAX_PAGE_CHARS) : undefined;
-    pageCache.set(url, readable);
-    return { text: readable, attempted: true, cacheHit: false, negativeCacheHit: false };
+    const readable = text.length > 160 ? text.slice(0, MAX_PAGE_CHARS) : null;
+    await pageCache.set(url, readable);
+    return { text: readable === null ? undefined : readable, attempted: true, cacheHit: false, negativeCacheHit: false };
   } catch {
-    pageCache.set(url, undefined);
+    await pageCache.set(url, null);
     return { attempted: true, cacheHit: false, negativeCacheHit: false };
   }
 }
@@ -508,10 +570,7 @@ export async function searchWebCandidatesDetailed(chunkText: string, maxResults 
   }
 
   const taskResults = await Promise.all(tasks.map(runProviderTask));
-  const providerDiagnostics = mergeSearchDiagnostics(
-    diagnostics,
-    ...taskResults.map(({ diagnostic }) => ({ ...emptySearchDiagnostics(), providers: [diagnostic] }))
-  );
+  const providerDiagnostics = mergeSearchDiagnostics(diagnostics, ...taskResults.map(({ diagnostic }) => ({ ...emptySearchDiagnostics(), providers: [diagnostic] })));
   const candidates = dedupeByUrl(interleaveCandidates(taskResults.map(({ candidates: group }) => group)))
     .slice(0, deep ? 18 : 10)
     .slice(0, maxResults);

@@ -39,17 +39,25 @@ describe("scoreCandidate", () => {
 
   it("does not turn a search snippet echo into confirmed plagiarism", () => {
     const source = "Academic integrity depends on careful citation transparent methods and original synthesis across several independent sources.";
-    const snippetLead = scoreCandidate(source, {
-      title: "Search result",
-      url: "https://example.com/lead",
-      snippet: source
-    }, 0);
-    const confirmedPage = scoreCandidate(source, {
-      title: "Verified source",
-      url: "https://example.com/page",
-      snippet: "A source about academic integrity.",
-      sourceText: `Introductory material. ${source} Additional verified page content.`
-    }, 0);
+    const snippetLead = scoreCandidate(
+      source,
+      {
+        title: "Search result",
+        url: "https://example.com/lead",
+        snippet: source
+      },
+      0
+    );
+    const confirmedPage = scoreCandidate(
+      source,
+      {
+        title: "Verified source",
+        url: "https://example.com/page",
+        snippet: "A source about academic integrity.",
+        sourceText: `Introductory material. ${source} Additional verified page content.`
+      },
+      0
+    );
 
     expect(snippetLead.confidence).toBe("snippet");
     expect(calculateConfirmedPlagiarismScore([snippetLead])).toBe(0);
@@ -150,7 +158,8 @@ describe("detectAiSignals", () => {
   });
 
   it("keeps sentence rhythm stable when coursework headings are added", () => {
-    const body = "The archived observations describe a repeatable procedure for collecting measurements. Each participant then reviews the record and explains any disagreement with the result. Researchers compare those comments with the earlier dataset before they accept a conclusion. The final discussion identifies limitations that require another round of field work.";
+    const body =
+      "The archived observations describe a repeatable procedure for collecting measurements. Each participant then reviews the record and explains any disagreement with the result. Researchers compare those comments with the earlier dataset before they accept a conclusion. The final discussion identifies limitations that require another round of field work.";
     const withoutHeadings = detectAiSignals(body);
     const withHeadings = detectAiSignals(`INTRODUCTION. ${body} CONCLUSION.`);
     const rhythm = (result: ReturnType<typeof detectAiSignals>) => result.signals.find((signal) => signal.label === "Рівномірність речень (Low Burstiness)")?.score ?? 0;
@@ -197,11 +206,15 @@ describe("detectAiSignals", () => {
   });
 
   it("keeps localized AI-style sections visible inside a long mixed document", () => {
-    const humanSection = Array.from({ length: 8 }, (_, index) =>
-      `During interview ${index + 1}, I recorded ${18 + index} observations and compared them with the archived measurements from 2021 [${index + 1}]. The notes include disagreements, corrections, and several unresolved questions that require another visit.`
+    const humanSection = Array.from(
+      { length: 8 },
+      (_, index) =>
+        `During interview ${index + 1}, I recorded ${18 + index} observations and compared them with the archived measurements from 2021 [${index + 1}]. The notes include disagreements, corrections, and several unresolved questions that require another visit.`
     ).join(" ");
-    const generatedSection = Array.from({ length: 7 }, () =>
-      "Moreover, it is important to note that this comprehensive and innovative approach not only enhances efficiency but also unlocks significant potential. Furthermore, the robust framework facilitates seamless optimization and underscores the pivotal role of transformative solutions."
+    const generatedSection = Array.from(
+      { length: 7 },
+      () =>
+        "Moreover, it is important to note that this comprehensive and innovative approach not only enhances efficiency but also unlocks significant potential. Furthermore, the robust framework facilitates seamless optimization and underscores the pivotal role of transformative solutions."
     ).join(" ");
 
     const result = detectAiSignals(`${humanSection} ${generatedSection} ${humanSection}`);
@@ -214,8 +227,10 @@ describe("detectAiSignals", () => {
   });
 
   it("calculates reliability from length and segment agreement", () => {
-    const text = Array.from({ length: 14 }, (_, index) =>
-      `Interview block ${index + 1} records the same measurement procedure, identifies the observer, lists the archive reference, and explains why the result was accepted after manual verification.`
+    const text = Array.from(
+      { length: 14 },
+      (_, index) =>
+        `Interview block ${index + 1} records the same measurement procedure, identifies the observer, lists the archive reference, and explains why the result was accepted after manual verification.`
     ).join(" ");
 
     const result = detectAiSignals(text);
@@ -233,8 +248,9 @@ describe("detectAiSignals", () => {
   });
 
   it("reports unsupported-language input as uncertain", () => {
-    const text = Array.from({ length: 12 }, () =>
-      "Кроме того, необходимо отметить, что данный комплексный подход обеспечивает эффективное развитие системы и позволяет последовательно решать поставленные задачи."
+    const text = Array.from(
+      { length: 12 },
+      () => "Кроме того, необходимо отметить, что данный комплексный подход обеспечивает эффективное развитие системы и позволяет последовательно решать поставленные задачи."
     ).join(" ");
     const result = detectAiSignals(text);
 
@@ -244,12 +260,11 @@ describe("detectAiSignals", () => {
   });
 
   it("does not let embedded source code distort direct AI analysis", () => {
-    const prose = Array.from({ length: 10 }, (_, index) =>
-      `Під час спостереження ${index + 1} я занотував результати, порівняв їх з архівом і пояснив, чому окремі вимірювання довелося повторити.`
+    const prose = Array.from(
+      { length: 10 },
+      (_, index) => `Під час спостереження ${index + 1} я занотував результати, порівняв їх з архівом і пояснив, чому окремі вимірювання довелося повторити.`
     ).join(" ");
-    const code = Array.from({ length: 20 }, (_, index) =>
-      `const result${index} = calculateScore(input${index});`
-    ).join("\n");
+    const code = Array.from({ length: 20 }, (_, index) => `const result${index} = calculateScore(input${index});`).join("\n");
     const clean = detectAiSignals(prose);
     const mixed = detectAiSignals(`${prose}\n${code}`);
 
@@ -258,12 +273,15 @@ describe("detectAiSignals", () => {
   });
 
   it("keeps distributed weak AI evidence visible in a long coursework", () => {
-    const text = Array.from({ length: 18 }, (_, index) => `
+    const text = Array.from(
+      { length: 18 },
+      (_, index) => `
       РОЗДІЛ ${index + 1}. У роботі розглянуто підхід ${index + 1} до організації інформаційних процесів.
       Варто зазначити, що цей підхід формує послідовну основу для подальшого аналізу та вдосконалення системи.
       Для перевірки використано ${30 + index} записів за ${2010 + (index % 14)} рік, після чого результати узагальнено у таблиці ${index + 1}.
       Отримані результати дозволяють визначити напрями подальшого розвитку та сформувати практичні рекомендації.
-    `).join(" ");
+    `
+    ).join(" ");
     const result = detectAiSignals(text);
 
     expect(result.probability).toBeGreaterThanOrEqual(12);
@@ -286,8 +304,10 @@ describe("detectAiSignals", () => {
       "I expected the southern plot to be drier. The soil sample proved otherwise, and the result changed the order of the next visits.",
       "One answer does not fit the broader pattern. I kept it because the recording is clear and there is no basis for correcting it."
     ].join(" ");
-    const aiIsland = Array.from({ length: 4 }, () =>
-      "Moreover, it is important to note that the comprehensive approach facilitates seamless optimization and underscores the pivotal role of innovative solutions in the evolving landscape."
+    const aiIsland = Array.from(
+      { length: 4 },
+      () =>
+        "Moreover, it is important to note that the comprehensive approach facilitates seamless optimization and underscores the pivotal role of innovative solutions in the evolving landscape."
     ).join(" ");
     const result = detectAiSignals(`${human} ${aiIsland} ${human}`);
 
@@ -298,10 +318,12 @@ describe("detectAiSignals", () => {
   });
 
   it("excludes long quotations and a bibliography tail from authorship style scoring", () => {
-    const authored = Array.from({ length: 10 }, (_, index) =>
-      `У власному спостереженні ${index + 1} я порівнюю польові нотатки, виправляю помилки вимірювання і пояснюю межі отриманого результату.`
+    const authored = Array.from(
+      { length: 10 },
+      (_, index) => `У власному спостереженні ${index + 1} я порівнюю польові нотатки, виправляю помилки вимірювання і пояснюю межі отриманого результату.`
     ).join(" ");
-    const quoted = '«Moreover, it is important to note that this comprehensive innovative framework facilitates seamless optimization and underscores a pivotal transformative role.»';
+    const quoted =
+      "«Moreover, it is important to note that this comprehensive innovative framework facilitates seamless optimization and underscores a pivotal transformative role.»";
     const references = "СПИСОК ВИКОРИСТАНИХ ДЖЕРЕЛ. 1. Ivanenko I. Comprehensive systems. 2021. 2. Petrenko P. Innovative frameworks. 2022.";
     const result = detectAiSignals(`${authored} ${quoted} ${references}`);
     const baseline = detectAiSignals(authored);
@@ -327,9 +349,9 @@ describe("detectAiSignals", () => {
   });
 
   it("recognizes Ukrainian first-person markers as false-positive context", () => {
-    const result = detectAiSignals(Array.from({ length: 8 }, () =>
-      "Я описую власне спостереження, ми перевіряємо наш журнал, а мені доводиться пояснювати кожне виправлення окремо."
-    ).join(" "));
+    const result = detectAiSignals(
+      Array.from({ length: 8 }, () => "Я описую власне спостереження, ми перевіряємо наш журнал, а мені доводиться пояснювати кожне виправлення окремо.").join(" ")
+    );
     const safeguard = result.signals.find((signal) => signal.category === "safeguard");
 
     expect(safeguard?.evidence?.join(" ")).toMatch(/авторської позиції/i);

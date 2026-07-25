@@ -5,7 +5,9 @@ import { mergeRevisedTextIntoDocx } from "./formattedDocx.js";
 
 function textRuns(xml: string): string[] {
   const $ = load(xml, { xml: true }, false);
-  return $("w\\:t").map((_index, element) => $(element).text()).get();
+  return $("w\\:t")
+    .map((_index, element) => $(element).text())
+    .get();
 }
 
 async function sourceDocx(): Promise<Buffer> {
@@ -15,14 +17,17 @@ async function sourceDocx(): Promise<Buffer> {
   zip.file("word/numbering.xml", '<w:numbering xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"><w:abstractNum w:abstractNumId="0" /></w:numbering>');
   zip.file("word/header1.xml", '<w:hdr xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"><w:p><w:r><w:t>Незмінний колонтитул</w:t></w:r></w:p></w:hdr>');
   zip.file("word/media/image1.png", Buffer.from([1, 2, 3, 4]));
-  zip.file("word/document.xml", `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+  zip.file(
+    "word/document.xml",
+    `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
     <w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main">
       <w:body>
         <w:p><w:pPr><w:jc w:val="center"/></w:pPr><w:r><w:rPr><w:b/></w:rPr><w:t>Назва роботи</w:t></w:r></w:p>
         <w:p><w:r><w:t>Це важливий текст.</w:t></w:r></w:p>
         <w:tbl><w:tr><w:tc><w:p><w:r><w:rPr><w:i/></w:rPr><w:t>Комірка таблиці</w:t></w:r></w:p></w:tc></w:tr></w:tbl>
       </w:body>
-    </w:document>`);
+    </w:document>`
+  );
   return zip.generateAsync({ type: "nodebuffer" });
 }
 

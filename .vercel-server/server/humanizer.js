@@ -107,7 +107,7 @@ const RULES = [
             const map = {
                 "сприяє підвищенню": "підвищує",
                 "забезпечує можливість": "дає змогу",
-                "розкриває потенціал": "показує можливості",
+                "розкриває потенціал": "показує можливості"
             };
             return map[match.toLowerCase()] ?? match;
         }
@@ -180,7 +180,9 @@ function softenRigidSentences(text) {
 }
 function removeDuplicateSentences(text) {
     let count = 0;
-    const paragraphs = text.split(/\n{2,}/).map((paragraph) => {
+    const paragraphs = text
+        .split(/\n{2,}/)
+        .map((paragraph) => {
         const seen = new Set();
         const sentences = paragraph.match(/[^.!?]+[.!?]+|[^.!?]+$/gu) ?? [paragraph];
         const kept = [];
@@ -201,7 +203,8 @@ function removeDuplicateSentences(text) {
             kept.push(trimmed);
         }
         return kept.join(" ");
-    }).filter(Boolean);
+    })
+        .filter(Boolean);
     return { text: paragraphs.join("\n\n"), count };
 }
 function varyRepeatedSentenceStarts(text) {
@@ -285,7 +288,8 @@ export function humanizeText(input) {
         "Модальність, тире, лапки й абзаци збережено, щоб не спотворювати авторський зміст.",
         "Факти, цитати й посилання треба перевірити вручну після редагування."
     ];
-    const vagueAttributions = original.match(/(?<![\p{L}\p{N}_])(?:експерти вважають|дослідження показують|багато джерел|experts argue|observers note|studies show|research suggests)(?![\p{L}\p{N}_])/giu) ?? [];
+    const vagueAttributions = original.match(/(?<![\p{L}\p{N}_])(?:експерти вважають|дослідження показують|багато джерел|experts argue|observers note|studies show|research suggests)(?![\p{L}\p{N}_])/giu) ??
+        [];
     if (vagueAttributions.length > 0) {
         notes.unshift(`Знайдено ${vagueAttributions.length} нечітких посилань на джерела. Формулювання збережено; додайте конкретного автора, працю або посилання вручну.`);
     }

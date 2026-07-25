@@ -42,15 +42,19 @@ export function mergeSearchDiagnostics(...items: SearchDiagnostics[]): SearchDia
 }
 
 export function searchDiagnosticsNotes(diagnostics: SearchDiagnostics): string[] {
-  const providerSummary = diagnostics.providers.map((provider) => {
-    if (provider.attempted === 0) return `${provider.provider}: пропущено`;
-    const issue = provider.failed ? `, ${provider.failed} пом.` : "";
-    return `${provider.provider}: ${provider.succeeded}/${provider.attempted}, ${provider.results} рез.${issue}`;
-  }).join(" · ");
+  const providerSummary = diagnostics.providers
+    .map((provider) => {
+      if (provider.attempted === 0) return `${provider.provider}: пропущено`;
+      const issue = provider.failed ? `, ${provider.failed} пом.` : "";
+      return `${provider.provider}: ${provider.succeeded}/${provider.attempted}, ${provider.results} рез.${issue}`;
+    })
+    .join(" · ");
   const notes = providerSummary ? [`Вебіндекси: ${providerSummary}.`] : [];
 
   if (diagnostics.pages.attempted || diagnostics.pages.cacheHits || diagnostics.pages.negativeCacheHits) {
-    notes.push(`Перевірка сторінок: підтверджено ${diagnostics.pages.verified}, недоступно ${diagnostics.pages.unavailable}, кеш-влучень ${diagnostics.pages.cacheHits}, повторно не завантажувались ${diagnostics.pages.negativeCacheHits}.`);
+    notes.push(
+      `Перевірка сторінок: підтверджено ${diagnostics.pages.verified}, недоступно ${diagnostics.pages.unavailable}, кеш-влучень ${diagnostics.pages.cacheHits}, повторно не завантажувались ${diagnostics.pages.negativeCacheHits}.`
+    );
   }
   return notes;
 }

@@ -2,6 +2,11 @@ import "dotenv/config";
 import cors from "cors";
 import express from "express";
 import multer from "multer";
+import pino from "pino";
+import pinoHttp from "pino-http";
+import { rateLimit } from "express-rate-limit";
+import { ScanRequestSchema, ScanSettingsSchema, LlmOpinionRequestSchema, HumanizeRequestSchema } from "../shared/validation.js";
+import { scanJobCache } from "./jobStore.js";
 import { chunkText, countWords } from "./chunking.js";
 import { prepareDocumentText } from "./documentPreprocess.js";
 import { mergeRevisedTextIntoHtml } from "./formattedDocument.js";
@@ -9,12 +14,27 @@ import { mergeRevisedTextIntoDocx } from "./formattedDocx.js";
 import { humanizeText } from "./humanizer.js";
 import { analyzeWithLlmProviders } from "./llmOpinion.js";
 import { emptySearchDiagnostics, mergeSearchDiagnostics, searchDiagnosticsNotes } from "./searchDiagnostics.js";
-import { calculateConfirmedPlagiarismScore, scoreCandidate, detectAiSignals, summarizeReport } from "./scoring.js";
+import { calculateConfirmedPlagiarismScore, scoreCandidate, detectAiSignals, summarizeReport, rerankCandidates } from "./scoring.js";
 import { decodeUploadFileName, extractTextFromUpload } from "./textExtraction.js";
 import { hydrateSearchCandidatesDetailed, searchWebCandidatesDetailed } from "./webSearch.js";
 import type { FileEvidence, HumanizeRequest, LlmOpinionRequest, PlagiarismMatch, ScanReport, ScanRequest, ScanSettings, SearchDiagnostics } from "../shared/types.js";
 
 export const app = express();
+
+const logger = pino({ level: process.env.LOG_LEVEL || "info" });
+app.use(pinoHttp({ logger }));
+
+app.use(
+  cors({
+    origin: process.env.CLIENT_URL ?? "http://localhost:5173",
+    methods: ["POST", "GET"]
+  })
+);
+app.use(express.json({ limit: "10mb" }));
+
+const scanLimiter = rateLimit({ windowMs: 60 * 1000, max: 10, message: { error: "Забагато запитів" } });
+const fileLimiter = rateLimit({ windowMs: 60 * 1000, max: 5, message: { error: "Забагато запитів з файлами" } });
+
 const upload = multer({
   storage: multer.memoryStorage(),
   limits: { fileSize: 50 * 1024 * 1024 }
@@ -27,29 +47,22 @@ const defaultSettings: ScanSettings = {
   sensitivity: "balanced"
 };
 
-function sanitizeSettings(settings?: Partial<ScanSettings>): ScanSettings {
-  const sensitivity = settings?.sensitivity ?? defaultSettings.sensitivity;
+function sanitizeSettings(settings?: unknown): ScanSettings {
+  const parsed = ScanSettingsSchema.safeParse(settings);
+  const safeSettings = parsed.success && parsed.data ? parsed.data : {};
+  const sensitivity = safeSettings.sensitivity ?? defaultSettings.sensitivity;
   const maxBySensitivity = sensitivity === "deep" ? 48 : sensitivity === "quick" ? 8 : 14;
 
   return {
-    maxChunks: Math.min(Math.max(Number(settings?.maxChunks ?? maxBySensitivity), 1), 2000),
-    chunkWords: Math.min(Math.max(Number(settings?.chunkWords ?? defaultSettings.chunkWords), 70), 520),
-    overlapWords: Math.min(Math.max(Number(settings?.overlapWords ?? defaultSettings.overlapWords), 0), 180),
+    maxChunks: Math.min(Math.max(Number(safeSettings.maxChunks ?? maxBySensitivity), 1), 2000),
+    chunkWords: Math.min(Math.max(Number(safeSettings.chunkWords ?? defaultSettings.chunkWords), 70), 520),
+    overlapWords: Math.min(Math.max(Number(safeSettings.overlapWords ?? defaultSettings.overlapWords), 0), 180),
     sensitivity
   };
 }
 
 function fullCoverageSettings(settings: ScanSettings, wordCount: number): ScanSettings {
-  const chunkWords =
-    wordCount > 20000
-      ? 520
-      : wordCount > 10000
-        ? 460
-        : wordCount > 5000
-          ? 380
-          : wordCount > 2000
-            ? Math.max(settings.chunkWords, 240)
-            : settings.chunkWords;
+  const chunkWords = wordCount > 20000 ? 520 : wordCount > 10000 ? 460 : wordCount > 5000 ? 380 : wordCount > 2000 ? Math.max(settings.chunkWords, 240) : settings.chunkWords;
   const overlapWords = Math.min(Math.floor(chunkWords * 0.18), Math.max(settings.overlapWords, wordCount > 5000 ? 56 : 32));
   const step = Math.max(60, chunkWords - overlapWords);
   const chunksNeeded = Math.max(1, Math.ceil(Math.max(1, wordCount - overlapWords) / step));
@@ -125,12 +138,13 @@ async function runScan(request: ScanRequest, fileEvidence?: FileEvidence): Promi
         includeAcademic: settings.sensitivity === "deep" && !veryLongDocumentMode,
         queryLimit: veryLongDocumentMode ? 1 : longDocumentMode ? 2 : undefined
       });
+      const reranked = await rerankCandidates(chunk.text, search.candidates);
       return {
-        matches: search.candidates.map((candidate): ChunkMatch => ({ chunkText: chunk.text, match: scoreCandidate(chunk.text, candidate, chunk.index) })),
+        matches: reranked.map((candidate): ChunkMatch => ({ chunkText: chunk.text, match: scoreCandidate(chunk.text, candidate, chunk.index) })),
         diagnostics: search.diagnostics
       };
     } catch (error) {
-      console.warn(error);
+      logger.warn(error);
       const diagnostics = emptySearchDiagnostics();
       diagnostics.providers.push({ provider: "Пошуковий pipeline", attempted: 1, succeeded: 0, failed: 1, timedOut: 0, results: 0 });
       return { matches: [], diagnostics };
@@ -194,9 +208,6 @@ async function runScan(request: ScanRequest, fileEvidence?: FileEvidence): Promi
   };
 }
 
-app.use(cors());
-app.use(express.json({ limit: "10mb" }));
-
 app.get("/api/health", (_request, response) => {
   response.json({ ok: true, app: "nezbig" });
 });
@@ -213,15 +224,52 @@ app.post("/api/extract", upload.single("file"), async (request, response) => {
   }
 });
 
-app.post("/api/scan", async (request, response) => {
+app.post("/api/scan", scanLimiter, async (request, response) => {
   try {
-    response.json(await runScan(request.body as ScanRequest));
+    const parsed = ScanRequestSchema.parse(request.body);
+    response.json(await runScan(parsed));
   } catch (error) {
     response.status(400).json({ error: error instanceof Error ? error.message : "Не вдалося виконати перевірку." });
   }
 });
 
-app.post("/api/scan-file", upload.single("file"), async (request, response) => {
+app.post("/api/scan/jobs", scanLimiter, async (request, response) => {
+  try {
+    const parsed = ScanRequestSchema.parse(request.body);
+    const jobId = crypto.randomUUID();
+    await scanJobCache.set(jobId, { id: jobId, status: "pending", createdAt: new Date().toISOString() });
+
+    Promise.resolve().then(async () => {
+      try {
+        await scanJobCache.set(jobId, { id: jobId, status: "processing", createdAt: new Date().toISOString() });
+        const report = await runScan(parsed);
+        await scanJobCache.set(jobId, { id: jobId, status: "completed", result: report, createdAt: new Date().toISOString() });
+      } catch (error) {
+        logger.error(error);
+        await scanJobCache.set(jobId, { id: jobId, status: "error", error: error instanceof Error ? error.message : "Помилка при перевірці", createdAt: new Date().toISOString() });
+      }
+    });
+
+    response.json({ jobId });
+  } catch (error) {
+    response.status(400).json({ error: error instanceof Error ? error.message : "Не вдалося запустити перевірку." });
+  }
+});
+
+app.get("/api/scan-status/:jobId", async (request, response) => {
+  try {
+    const job = await scanJobCache.get(request.params.jobId);
+    if (!job) {
+      response.status(404).json({ error: "Завдання не знайдено" });
+      return;
+    }
+    response.json(job);
+  } catch (error) {
+    response.status(500).json({ error: "Помилка сервера" });
+  }
+});
+
+app.post("/api/scan-file", fileLimiter, upload.single("file"), async (request, response) => {
   try {
     if (!request.file) {
       response.status(400).json({ error: "Додайте файл для перевірки." });
@@ -229,16 +277,48 @@ app.post("/api/scan-file", upload.single("file"), async (request, response) => {
     }
 
     const extracted = await extractTextFromUpload(request.file);
-    const settings = typeof request.body.settings === "string" ? JSON.parse(request.body.settings) : request.body.settings;
+    const rawSettings = typeof request.body.settings === "string" ? JSON.parse(request.body.settings) : request.body.settings;
+    const settings = ScanSettingsSchema.parse(rawSettings);
     response.json(await runScan({ text: extracted.text, fileName: extracted.fileName, settings }, extracted.fileEvidence));
   } catch (error) {
     response.status(400).json({ error: error instanceof Error ? error.message : "Не вдалося виконати файлову перевірку." });
   }
 });
 
-app.post("/api/ai-opinion", async (request, response) => {
+app.post("/api/scan-file/jobs", fileLimiter, upload.single("file"), async (request, response) => {
   try {
-    const body = request.body as LlmOpinionRequest;
+    if (!request.file) {
+      response.status(400).json({ error: "Додайте файл для перевірки." });
+      return;
+    }
+    const extracted = await extractTextFromUpload(request.file);
+    const rawSettings = typeof request.body.settings === "string" ? JSON.parse(request.body.settings) : request.body.settings;
+    const settings = ScanSettingsSchema.parse(rawSettings);
+    const parsed = { text: extracted.text, fileName: extracted.fileName, settings };
+
+    const jobId = crypto.randomUUID();
+    await scanJobCache.set(jobId, { id: jobId, status: "pending", createdAt: new Date().toISOString() });
+
+    Promise.resolve().then(async () => {
+      try {
+        await scanJobCache.set(jobId, { id: jobId, status: "processing", createdAt: new Date().toISOString() });
+        const report = await runScan(parsed, extracted.fileEvidence);
+        await scanJobCache.set(jobId, { id: jobId, status: "completed", result: report, createdAt: new Date().toISOString() });
+      } catch (error) {
+        logger.error(error);
+        await scanJobCache.set(jobId, { id: jobId, status: "error", error: error instanceof Error ? error.message : "Помилка при перевірці", createdAt: new Date().toISOString() });
+      }
+    });
+
+    response.json({ jobId });
+  } catch (error) {
+    response.status(400).json({ error: error instanceof Error ? error.message : "Не вдалося запустити файлову перевірку." });
+  }
+});
+
+app.post("/api/ai-opinion", scanLimiter, async (request, response) => {
+  try {
+    const body = LlmOpinionRequestSchema.parse(request.body);
     const text = prepareDocumentText(body.text).text;
     if (text.length < 120) {
       response.status(400).json({ error: "Додайте щонайменше 120 символів тексту для AI-думки." });
@@ -292,9 +372,9 @@ app.post("/api/ai-opinion-file", upload.single("file"), async (request, response
   }
 });
 
-app.post("/api/humanize", async (request, response) => {
+app.post("/api/humanize", scanLimiter, async (request, response) => {
   try {
-    const body = request.body as HumanizeRequest;
+    const body = HumanizeRequestSchema.parse(request.body);
     const result = humanizeText(body.text);
     response.json({
       ...result,

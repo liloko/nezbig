@@ -16,9 +16,7 @@ function copyFormattedSelection(html: string): boolean {
   document.body.append(buffer);
 
   const selection = window.getSelection();
-  const savedRanges = selection
-    ? Array.from({ length: selection.rangeCount }, (_, index) => selection.getRangeAt(index).cloneRange())
-    : [];
+  const savedRanges = selection ? Array.from({ length: selection.rangeCount }, (_, index) => selection.getRangeAt(index).cloneRange()) : [];
 
   try {
     const range = document.createRange();

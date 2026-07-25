@@ -1,8 +1,33 @@
 ﻿import { normalizeWhitespace } from "../chunking.js";
 
 export const STOP_WORDS = new Set([
-  "але", "або", "для", "про", "при", "що", "це", "цей", "ця", "цих", "так", "які", "який", "яка", "було", "були", "бути",
-  "the", "and", "that", "with", "from", "this", "have", "are", "was", "were"
+  "але",
+  "або",
+  "для",
+  "про",
+  "при",
+  "що",
+  "це",
+  "цей",
+  "ця",
+  "цих",
+  "так",
+  "які",
+  "який",
+  "яка",
+  "було",
+  "були",
+  "бути",
+  "the",
+  "and",
+  "that",
+  "with",
+  "from",
+  "this",
+  "have",
+  "are",
+  "was",
+  "were"
 ]);
 
 export function tokenize(text: string, keepStopWords = false): string[] {

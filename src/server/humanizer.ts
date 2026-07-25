@@ -57,7 +57,8 @@ const RULES: Rule[] = [
   {
     label: "Очищено українські шаблони",
     detail: "Скорочено типові академічні AI-звороти без втрати змісту.",
-    pattern: /(?:варто зазначити,?\s*що|слід зазначити,?\s*що|важливо підкреслити,?\s*що|доцільно зазначити,?\s*що|на основі проведеного аналізу встановлено,?\s*що|отримані результати дозволяють зробити висновок,?\s*що|необхідно зауважити,?\s*що|цікаво відзначити,?\s*що)/giu,
+    pattern:
+      /(?:варто зазначити,?\s*що|слід зазначити,?\s*що|важливо підкреслити,?\s*що|доцільно зазначити,?\s*що|на основі проведеного аналізу встановлено,?\s*що|отримані результати дозволяють зробити висновок,?\s*що|необхідно зауважити,?\s*що|цікаво відзначити,?\s*що)/giu,
     replacement: (match) => {
       const lower = match.toLowerCase();
       if (lower.includes("аналіз")) return "аналіз показав, що";
@@ -68,7 +69,8 @@ const RULES: Rule[] = [
   {
     label: "Переписано академічні заготовки",
     detail: "Службові формули курсової замінено на коротші конструкції без шаблонного вступу.",
-    pattern: /(?:метою\s+(?:роботи|дослідження)\s+є|завданнями\s+(?:роботи|дослідження)\s+є|актуальність\s+(?:обраної\s+)?теми\s+(?:полягає|зумовлена)\s+(?:у\s+тому,?\s*що|тим,?\s*що|у)|предметом\s+дослідження\s+є|об['’]єктом\s+дослідження\s+є|робота\s+складається\s+з)/giu,
+    pattern:
+      /(?:метою\s+(?:роботи|дослідження)\s+є|завданнями\s+(?:роботи|дослідження)\s+є|актуальність\s+(?:обраної\s+)?теми\s+(?:полягає|зумовлена)\s+(?:у\s+тому,?\s*що|тим,?\s*що|у)|предметом\s+дослідження\s+є|об['’]єктом\s+дослідження\s+є|робота\s+складається\s+з)/giu,
     replacement: (match) => {
       const lower = match.toLowerCase();
       if (lower.startsWith("метою")) return "Мета:";
@@ -93,7 +95,8 @@ const RULES: Rule[] = [
   {
     label: "Прибрано накопичення оцінних прикметників",
     detail: "Скорочено лише подвійні оцінні кліше; окремі наукові й технічні терміни збережено.",
-    pattern: /(?<![\p{L}\p{N}_])(?:важлив(?:ий|а|е|і)|ключов(?:ий|а|е|і)|унікальн(?:ий|а|е|і)|інноваційн(?:ий|а|е|і))\s+(?:комплексн(?:ий|а|е|і)|ефективн(?:ий|а|е|і))\s+(підхід|аспект|блок|рішення|система|процес)(?![\p{L}\p{N}_])/giu,
+    pattern:
+      /(?<![\p{L}\p{N}_])(?:важлив(?:ий|а|е|і)|ключов(?:ий|а|е|і)|унікальн(?:ий|а|е|і)|інноваційн(?:ий|а|е|і))\s+(?:комплексн(?:ий|а|е|і)|ефективн(?:ий|а|е|і))\s+(підхід|аспект|блок|рішення|система|процес)(?![\p{L}\p{N}_])/giu,
     replacement: "$1"
   },
   {
@@ -104,7 +107,7 @@ const RULES: Rule[] = [
       const map: Record<string, string> = {
         "сприяє підвищенню": "підвищує",
         "забезпечує можливість": "дає змогу",
-        "розкриває потенціал": "показує можливості",
+        "розкриває потенціал": "показує можливості"
       };
       return map[match.toLowerCase()] ?? match;
     }
@@ -183,31 +186,34 @@ function softenRigidSentences(text: string): { text: string; count: number } {
 
 function removeDuplicateSentences(text: string): { text: string; count: number } {
   let count = 0;
-  const paragraphs = text.split(/\n{2,}/).map((paragraph) => {
-    const seen = new Set<string>();
-    const sentences = paragraph.match(/[^.!?]+[.!?]+|[^.!?]+$/gu) ?? [paragraph];
-    const kept: string[] = [];
+  const paragraphs = text
+    .split(/\n{2,}/)
+    .map((paragraph) => {
+      const seen = new Set<string>();
+      const sentences = paragraph.match(/[^.!?]+[.!?]+|[^.!?]+$/gu) ?? [paragraph];
+      const kept: string[] = [];
 
-    for (const sentence of sentences) {
-      const trimmed = sentence.trim();
-      const normalized = trimmed
-        .toLowerCase()
-        .replace(/\d+/g, "#")
-        .replace(/[^\p{L}\p{N}\s#]/gu, " ")
-        .replace(/\s+/g, " ")
-        .trim();
+      for (const sentence of sentences) {
+        const trimmed = sentence.trim();
+        const normalized = trimmed
+          .toLowerCase()
+          .replace(/\d+/g, "#")
+          .replace(/[^\p{L}\p{N}\s#]/gu, " ")
+          .replace(/\s+/g, " ")
+          .trim();
 
-      if (normalized.split(" ").length >= 7 && seen.has(normalized)) {
-        count += 1;
-        continue;
+        if (normalized.split(" ").length >= 7 && seen.has(normalized)) {
+          count += 1;
+          continue;
+        }
+
+        if (normalized) seen.add(normalized);
+        kept.push(trimmed);
       }
 
-      if (normalized) seen.add(normalized);
-      kept.push(trimmed);
-    }
-
-    return kept.join(" ");
-  }).filter(Boolean);
+      return kept.join(" ");
+    })
+    .filter(Boolean);
 
   return { text: paragraphs.join("\n\n"), count };
 }
@@ -294,10 +300,12 @@ export function humanizeText(input: string): HumanizeResult {
 
   revised = revised
     .split(/\n{2,}/)
-    .map((paragraph) => normalizeWhitespace(paragraph)
-      .replace(/\s+([,.;:!?])/g, "$1")
-      .replace(/,\s*,/g, ",")
-      .trim())
+    .map((paragraph) =>
+      normalizeWhitespace(paragraph)
+        .replace(/\s+([,.;:!?])/g, "$1")
+        .replace(/,\s*,/g, ",")
+        .trim()
+    )
     .filter(Boolean)
     .join("\n\n");
 
@@ -307,7 +315,9 @@ export function humanizeText(input: string): HumanizeResult {
     "Факти, цитати й посилання треба перевірити вручну після редагування."
   ];
 
-  const vagueAttributions = original.match(/(?<![\p{L}\p{N}_])(?:експерти вважають|дослідження показують|багато джерел|experts argue|observers note|studies show|research suggests)(?![\p{L}\p{N}_])/giu) ?? [];
+  const vagueAttributions =
+    original.match(/(?<![\p{L}\p{N}_])(?:експерти вважають|дослідження показують|багато джерел|experts argue|observers note|studies show|research suggests)(?![\p{L}\p{N}_])/giu) ??
+    [];
   if (vagueAttributions.length > 0) {
     notes.unshift(`Знайдено ${vagueAttributions.length} нечітких посилань на джерела. Формулювання збережено; додайте конкретного автора, працю або посилання вручну.`);
   }

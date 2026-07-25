@@ -37,7 +37,10 @@ export function mergeRevisedTextIntoHtml(originalHtml, revisedText) {
     if (effectiveBlocks.length === 0)
         return originalHtml;
     const originalParagraphs = effectiveBlocks.map((element) => $(element).text().replace(/\s+/g, " ").trim());
-    const revisedParagraphs = revisedText.split(/\n{2,}/).map((paragraph) => paragraph.trim()).filter(Boolean);
+    const revisedParagraphs = revisedText
+        .split(/\n{2,}/)
+        .map((paragraph) => paragraph.trim())
+        .filter(Boolean);
     const aligned = alignParagraphs(originalParagraphs, revisedParagraphs);
     effectiveBlocks.forEach((element, index) => replaceElementText($, element, aligned[index] ?? ""));
     return $.root().html() ?? originalHtml;

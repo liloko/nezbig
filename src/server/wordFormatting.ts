@@ -98,9 +98,7 @@ export function createWordHtmlOptions(): WordHtmlOptions {
     const className = `Nezbig${prefix}${classesBySignature.size}`;
     classesBySignature.set(signature, className);
     generatedStyles.set(className, declarations.join(";"));
-    styleMap.push(prefix === "Paragraph"
-      ? `p.${className} => ${tag}.${className}:fresh`
-      : `r.${className} => span.${className}`);
+    styleMap.push(prefix === "Paragraph" ? `p.${className} => ${tag}.${className}:fresh` : `r.${className} => span.${className}`);
     return className;
   }
 

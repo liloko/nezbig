@@ -7,9 +7,7 @@ type SourceToken = {
 };
 
 function tokenizeParts(parts: string[]): SourceToken[] {
-  return parts.flatMap((part, partIndex) =>
-    (part.match(TOKEN_PATTERN) ?? []).map((value) => ({ value, partIndex }))
-  );
+  return parts.flatMap((part, partIndex) => (part.match(TOKEN_PATTERN) ?? []).map((value) => ({ value, partIndex })));
 }
 
 function tokenKind(value: string): "space" | "word" | "punctuation" {
@@ -26,9 +24,7 @@ function substitutionCost(original: string, revised: string): number {
 function proportionalPartMap(original: SourceToken[], revised: string[]): number[] {
   const partIndexes = original.map((token) => token.partIndex);
   if (partIndexes.length === 0) return revised.map(() => 0);
-  return revised.map((_token, index) =>
-    partIndexes[Math.min(partIndexes.length - 1, Math.floor((index / Math.max(1, revised.length)) * partIndexes.length))]
-  );
+  return revised.map((_token, index) => partIndexes[Math.min(partIndexes.length - 1, Math.floor((index / Math.max(1, revised.length)) * partIndexes.length))]);
 }
 
 function alignTokensToParts(original: SourceToken[], revised: string[]): number[] {

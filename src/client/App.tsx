@@ -204,7 +204,11 @@ function downloadReportPng(report: ScanReport): void {
   const cards = [
     ["Плагіат", `${report.plagiarismScore}%`, `${riskLabel(report.plagiarismScore)} ризик`],
     ["ШІ-аналіз", report.aiVerdict === "insufficient" ? "—" : `${report.aiProbability}%`, aiVerdictLabel(report.aiVerdict)],
-    ["AI-думка", report.aiOpinionProbability !== undefined ? `${report.aiOpinionProbability}%` : "…", report.aiOpinionProbability !== undefined ? `${riskLabel(report.aiOpinionProbability)} рівень` : "очікує модель"],
+    [
+      "AI-думка",
+      report.aiOpinionProbability !== undefined ? `${report.aiOpinionProbability}%` : "…",
+      report.aiOpinionProbability !== undefined ? `${riskLabel(report.aiOpinionProbability)} рівень` : "очікує модель"
+    ],
     ["Фрагменти", formatNumber(report.chunksChecked), `${formatNumber(report.wordCount)} слів`]
   ];
 
@@ -275,7 +279,14 @@ function downloadReportPng(report: ScanReport): void {
       context.fillStyle = printGray;
       context.font = "400 21px Actay, sans-serif";
       const evidenceLabel = match.confidence === "page" ? "підтверджено сторінкою" : "пошукова підказка";
-      y = wrapCanvasText(context, `${match.url} | ${evidenceLabel} | слова ${match.overlapPercent}%, хеші ${match.hashOverlapPercent}%, full-text ${match.fullTextRank}%`, 90, y + 6, 1180, 29);
+      y = wrapCanvasText(
+        context,
+        `${match.url} | ${evidenceLabel} | слова ${match.overlapPercent}%, хеші ${match.hashOverlapPercent}%, full-text ${match.fullTextRank}%`,
+        90,
+        y + 6,
+        1180,
+        29
+      );
       if (match.confidence === "page" && match.submittedEvidence) {
         y = wrapCanvasText(context, `Спільний уривок: ${match.submittedEvidence}`, 90, y + 4, 1180, 29);
       }
@@ -318,7 +329,7 @@ function downloadReportPng(report: ScanReport): void {
 function SignalCard({ signal, className = "" }: { signal: ScanReport["aiSignals"][number]; className?: string }) {
   const isCritical = signal.score >= 50 && signal.category !== "safeguard";
   const isSafeguard = signal.category === "safeguard";
-  
+
   return (
     <article className={`signal ${className} ${isCritical ? "signal-critical" : ""} ${isSafeguard ? "signal-safeguard" : ""}`.trim()} key={signal.label}>
       <div className="signal-header">
@@ -328,7 +339,12 @@ function SignalCard({ signal, className = "" }: { signal: ScanReport["aiSignals"
         </div>
         <span className="signal-score-badge">{signal.score}%</span>
       </div>
-      <progress value={signal.score} max="100" aria-label={`${signal.label}: ${signal.score}%`} className={isCritical ? "progress-critical" : isSafeguard ? "progress-safeguard" : ""} />
+      <progress
+        value={signal.score}
+        max="100"
+        aria-label={`${signal.label}: ${signal.score}%`}
+        className={isCritical ? "progress-critical" : isSafeguard ? "progress-safeguard" : ""}
+      />
       <p className="signal-detail">{signal.detail}</p>
       {signal.evidence && signal.evidence.length > 0 ? (
         <ul className="evidence-list">
@@ -377,11 +393,7 @@ export default function App() {
   useEffect(() => {
     setSettings((current) => {
       const recommended = recommendSettings(wordCount, current.sensitivity);
-      if (
-        current.chunkWords === recommended.chunkWords &&
-        current.overlapWords === recommended.overlapWords &&
-        current.maxChunks === recommended.maxChunks
-      ) {
+      if (current.chunkWords === recommended.chunkWords && current.overlapWords === recommended.overlapWords && current.maxChunks === recommended.maxChunks) {
         return current;
       }
       return recommended;
@@ -573,15 +585,17 @@ export default function App() {
     setLlmBusy(true);
 
     try {
-      const response = sourceFile ? await loadFileLlmOpinion(baseReport, sourceFile) : await fetch("/api/ai-opinion", {
-          method: "POST",
-          headers: { "content-type": "application/json" },
-          body: JSON.stringify({
-            text: sourceText,
-            localProbability: baseReport.aiProbability,
-            localSignals: baseReport.aiSignals
-          })
-        });
+      const response = sourceFile
+        ? await loadFileLlmOpinion(baseReport, sourceFile)
+        : await fetch("/api/ai-opinion", {
+            method: "POST",
+            headers: { "content-type": "application/json" },
+            body: JSON.stringify({
+              text: sourceText,
+              localProbability: baseReport.aiProbability,
+              localSignals: baseReport.aiSignals
+            })
+          });
       const payload = (await response.json()) as LlmOpinion | { error: string };
       if (!response.ok || "error" in payload) throw new Error("error" in payload ? payload.error : "AI-думка недоступна.");
 
@@ -625,11 +639,13 @@ export default function App() {
     setMessage(selectedFile ? "Редагую стиль тексту з файлу…" : "Редагую стиль вставленого тексту…");
 
     try {
-      const response = selectedFile ? await humanizeSelectedFile(selectedFile) : await fetch("/api/humanize", {
-        method: "POST",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify({ text, html: sourceHtml })
-      });
+      const response = selectedFile
+        ? await humanizeSelectedFile(selectedFile)
+        : await fetch("/api/humanize", {
+            method: "POST",
+            headers: { "content-type": "application/json" },
+            body: JSON.stringify({ text, html: sourceHtml })
+          });
       const payload = (await response.json()) as HumanizeResult | { error: string };
       if (!response.ok || "error" in payload) throw new Error("error" in payload ? payload.error : "Редагування не вдалося.");
       setHumanized(payload);
@@ -661,7 +677,9 @@ export default function App() {
 
   return (
     <>
-      <a className="skip-link" href="#checker">Перейти до перевірки</a>
+      <a className="skip-link" href="#checker">
+        Перейти до перевірки
+      </a>
       <main className="app-shell">
         <section className="intro" aria-labelledby="page-title">
           <div className="brand-lockup">
@@ -723,13 +741,15 @@ export default function App() {
                 <button
                   type="button"
                   className="secondary-button"
-                  onClick={() => selectedFile ? downloadOriginalFile(selectedFile) : downloadFormattedForWord(sourceHtml, fileName)}
+                  onClick={() => (selectedFile ? downloadOriginalFile(selectedFile) : downloadFormattedForWord(sourceHtml, fileName))}
                 >
                   {selectedFile ? "Завантажити оригінал" : "Завантажити для Word"}
                 </button>
-                <span>{selectedFile
-                  ? "Оригінальний файл не перетворюється; preview і текст для аналізу зберігаються окремо."
-                  : "Шрифти, розміри, вирівнювання, відступи, списки й таблиці зберігаються окремо від тексту для аналізу."}</span>
+                <span>
+                  {selectedFile
+                    ? "Оригінальний файл не перетворюється; preview і текст для аналізу зберігаються окремо."
+                    : "Шрифти, розміри, вирівнювання, відступи, списки й таблиці зберігаються окремо від тексту для аналізу."}
+                </span>
               </div>
             ) : null}
             {selectedFile ? (
@@ -793,7 +813,9 @@ export default function App() {
             <button type="button" className="secondary-button humanize-button" disabled={!canHumanize} onClick={() => void handleHumanize()}>
               {humanizerBusy ? "Редагування…" : "Покращити стиль"}
             </button>
-            <p className="message" aria-live="polite">{message}</p>
+            <p className="message" aria-live="polite">
+              {message}
+            </p>
           </aside>
         </form>
 
@@ -802,9 +824,14 @@ export default function App() {
             <div>
               <p className="eyebrow">Редактор стилю</p>
               <h2 id="humanizer-title">Відредагований текст</h2>
-              <p>{formatNumber(humanized.originalWordCount)} -&gt; {formatNumber(humanized.revisedWordCount)} слів</p>
+              <p>
+                {formatNumber(humanized.originalWordCount)} -&gt; {formatNumber(humanized.revisedWordCount)} слів
+              </p>
             </div>
-            <div className="humanized-output rich-output" dangerouslySetInnerHTML={{ __html: sanitizeRichHtml(humanized.revisedHtml ?? htmlFromPlainText(humanized.revisedText)) }} />
+            <div
+              className="humanized-output rich-output"
+              dangerouslySetInnerHTML={{ __html: sanitizeRichHtml(humanized.revisedHtml ?? htmlFromPlainText(humanized.revisedText)) }}
+            />
             <div className="humanizer-actions">
               <button type="button" className="secondary-button" onClick={moveHumanizedTextToChecker}>
                 Перенести в перевірку
@@ -812,12 +839,7 @@ export default function App() {
               <button type="button" className="secondary-button" onClick={() => void copyHumanizedFormatted()}>
                 Копіювати у Word
               </button>
-              <button
-                type="button"
-                className="secondary-button"
-                disabled={wordDownloadBusy}
-                onClick={() => void downloadHumanizedForWord()}
-              >
+              <button type="button" className="secondary-button" disabled={wordDownloadBusy} onClick={() => void downloadHumanizedForWord()}>
                 {wordDownloadBusy ? "Збираю DOCX…" : selectedFile && /\.docx$/i.test(selectedFile.name) ? "Завантажити DOCX" : "Завантажити для Word"}
               </button>
               <span>Після перенесення перевірте факти й запустіть аналіз повторно.</span>
@@ -832,7 +854,9 @@ export default function App() {
                     {humanized.changes.map((change) => (
                       <li key={change.label}>
                         <strong>{change.label}</strong>
-                        <span>{change.count}x - {change.detail}</span>
+                        <span>
+                          {change.count}x - {change.detail}
+                        </span>
                       </li>
                     ))}
                   </ul>
@@ -842,7 +866,9 @@ export default function App() {
                 <h3>Примітки</h3>
                 <ul className="humanizer-list">
                   {humanized.notes.map((note) => (
-                    <li key={note}><span>{note}</span></li>
+                    <li key={note}>
+                      <span>{note}</span>
+                    </li>
                   ))}
                 </ul>
               </section>
@@ -895,7 +921,13 @@ export default function App() {
               <article>
                 <span>AI-думка</span>
                 <strong>{report.aiOpinionProbability !== undefined ? `${report.aiOpinionProbability}%` : "…"}</strong>
-                <small>{report.aiOpinionProbability !== undefined ? `${riskLabel(report.aiOpinionProbability)} рівень від моделі` : llmBusy ? "модель ще думає" : "немає відповіді моделі"}</small>
+                <small>
+                  {report.aiOpinionProbability !== undefined
+                    ? `${riskLabel(report.aiOpinionProbability)} рівень від моделі`
+                    : llmBusy
+                      ? "модель ще думає"
+                      : "немає відповіді моделі"}
+                </small>
               </article>
               <article>
                 <span>Фрагменти</span>
@@ -953,16 +985,16 @@ export default function App() {
                             <span>Фрагмент {match.chunkIndex + 1}</span>
                           </div>
                           <h4>
-                            <a href={match.url} target="_blank" rel="noreferrer">{match.title}</a>
+                            <a href={match.url} target="_blank" rel="noreferrer">
+                              {match.title}
+                            </a>
                           </h4>
                           <p>{match.snippet}</p>
                           {match.confidence === "page" && match.submittedEvidence ? (
                             <div className="match-evidence">
                               <strong>Підтверджений спільний уривок</strong>
                               <blockquote>{match.submittedEvidence}</blockquote>
-                              {match.sourceEvidence && match.sourceEvidence !== match.submittedEvidence ? (
-                                <blockquote>{match.sourceEvidence}</blockquote>
-                              ) : null}
+                              {match.sourceEvidence && match.sourceEvidence !== match.submittedEvidence ? <blockquote>{match.sourceEvidence}</blockquote> : null}
                             </div>
                           ) : (
                             <p className="match-lead-note">Пошукова підказка: сторінку ще не підтверджено, тому цей результат не впливає на загальний відсоток плагіату.</p>
@@ -1014,12 +1046,16 @@ export default function App() {
                       {report.aiSuspiciousSegments.map((segment) => (
                         <article className="segment-card" key={`${segment.index}-${segment.startWord}`}>
                           <div>
-                            <strong>Слова {formatNumber(segment.startWord)}–{formatNumber(segment.endWord)}</strong>
+                            <strong>
+                              Слова {formatNumber(segment.startWord)}–{formatNumber(segment.endWord)}
+                            </strong>
                             <span>{segment.score}%</span>
                           </div>
                           <blockquote>{segment.excerpt}</blockquote>
                           <ul>
-                            {segment.evidence.map((evidence) => <li key={evidence}>{evidence}</li>)}
+                            {segment.evidence.map((evidence) => (
+                              <li key={evidence}>{evidence}</li>
+                            ))}
                           </ul>
                         </article>
                       ))}
@@ -1038,20 +1074,36 @@ export default function App() {
 
               <section aria-labelledby="ai-title">
                 <h3 id="ai-title">Розширений AI-аналіз</h3>
-                <p className="model-badge">
-                  {llmBusy ? "AI-думка: очікування відповіді…" : "Локальний AI-відсоток незалежний від LLM"}
-                </p>
+                <p className="model-badge">{llmBusy ? "AI-думка: очікування відповіді…" : "Локальний AI-відсоток незалежний від LLM"}</p>
                 <div className={`reliability-line reliability-${report.aiReliability.level}`}>
-                  <strong>Надійність оцінки: {reliabilityLabel(report.aiReliability.level)} ({report.aiReliability.score}/100)</strong>
-                  <span>{report.aiReliability.segmentCount} сегм. · розкид {report.aiReliability.segmentSpread} п.п.</span>
+                  <strong>
+                    Надійність оцінки: {reliabilityLabel(report.aiReliability.level)} ({report.aiReliability.score}/100)
+                  </strong>
+                  <span>
+                    {report.aiReliability.segmentCount} сегм. · розкид {report.aiReliability.segmentSpread} п.п.
+                  </span>
                   <p>{report.aiReliability.reason}</p>
                 </div>
                 <div className="ai-context-strip" aria-label="Контекст локального AI-аналізу">
-                  <span><strong>Мова</strong>{languageLabel(report.aiLanguage.code)} · {report.aiLanguage.supportedPercent}% покриття</span>
-                  <span><strong>Проаналізовано</strong>{formatNumber(report.aiExclusions.analyzedWords)} слів</span>
-                  {report.aiExclusions.codeWords > 0 ? <span><strong>Код вилучено</strong>{formatNumber(report.aiExclusions.codeWords)} слів</span> : null}
+                  <span>
+                    <strong>Мова</strong>
+                    {languageLabel(report.aiLanguage.code)} · {report.aiLanguage.supportedPercent}% покриття
+                  </span>
+                  <span>
+                    <strong>Проаналізовано</strong>
+                    {formatNumber(report.aiExclusions.analyzedWords)} слів
+                  </span>
+                  {report.aiExclusions.codeWords > 0 ? (
+                    <span>
+                      <strong>Код вилучено</strong>
+                      {formatNumber(report.aiExclusions.codeWords)} слів
+                    </span>
+                  ) : null}
                   {report.aiExclusions.quotedWords + report.aiExclusions.referenceWords > 0 ? (
-                    <span><strong>Цитати й джерела</strong>{formatNumber(report.aiExclusions.quotedWords + report.aiExclusions.referenceWords)} слів</span>
+                    <span>
+                      <strong>Цитати й джерела</strong>
+                      {formatNumber(report.aiExclusions.quotedWords + report.aiExclusions.referenceWords)} слів
+                    </span>
                   ) : null}
                 </div>
                 {report.aiNote ? <p className="provider-note">{report.aiNote}</p> : null}
@@ -1062,14 +1114,19 @@ export default function App() {
                     {report.aiOpinionNote ? <p>{report.aiOpinionNote}</p> : null}
                   </div>
                 ) : null}
-                <p className="section-note">Локальний ансамбль перевіряє авторський текст повністю й окремими сегментами. Відсоток є евристичним індикатором ризику, а не каліброваною ймовірністю чи доказом авторства.</p>
+                <p className="section-note">
+                  Локальний ансамбль перевіряє авторський текст повністю й окремими сегментами. Відсоток є евристичним індикатором ризику, а не каліброваною ймовірністю чи доказом
+                  авторства.
+                </p>
                 <div className="signal-list">
                   {primaryAiSignals.map((signal) => (
                     <SignalCard signal={signal} key={signal.label} />
                   ))}
-                  {report.aiOpinionSignals?.filter((signal) => !isDuplicateOpinionSignal(signal, report.aiSignals)).map((signal) => (
-                    <SignalCard signal={signal} className="opinion-signal" key={`opinion-${signal.label}`} />
-                  ))}
+                  {report.aiOpinionSignals
+                    ?.filter((signal) => !isDuplicateOpinionSignal(signal, report.aiSignals))
+                    .map((signal) => (
+                      <SignalCard signal={signal} className="opinion-signal" key={`opinion-${signal.label}`} />
+                    ))}
                 </div>
               </section>
             </div>

@@ -87,10 +87,7 @@ export async function extractTextFromUpload(file) {
     }
     else if (extractionMethod === "docx") {
         const wordHtmlOptions = createWordHtmlOptions();
-        const [textResult, htmlResult] = await Promise.all([
-            mammoth.extractRawText({ buffer: file.buffer }),
-            mammoth.convertToHtml({ buffer: file.buffer }, wordHtmlOptions)
-        ]);
+        const [textResult, htmlResult] = await Promise.all([mammoth.extractRawText({ buffer: file.buffer }), mammoth.convertToHtml({ buffer: file.buffer }, wordHtmlOptions)]);
         text = textResult.value;
         html = htmlResult.value ? withWordFormattingStyles(htmlResult.value, wordHtmlOptions) : undefined;
     }

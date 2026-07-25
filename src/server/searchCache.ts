@@ -1,3 +1,5 @@
+import { kv } from "@vercel/kv";
+
 type CacheEntry<T> = {
   expiresAt: number;
   value: T;
@@ -41,5 +43,52 @@ export class MemoryTtlCache<T> {
     }
 
     return entry;
+  }
+}
+
+export class DistributedCache<T> {
+  private readonly memoryCache: MemoryTtlCache<T>;
+  private readonly isKvEnabled: boolean;
+
+  constructor(
+    private readonly prefix: string,
+    private readonly ttlMs: number,
+    maxMemoryEntries = 300
+  ) {
+    this.memoryCache = new MemoryTtlCache<T>(ttlMs, maxMemoryEntries);
+    this.isKvEnabled = !!process.env.KV_REST_API_URL && !!process.env.KV_REST_API_TOKEN;
+  }
+
+  async get(key: string): Promise<T | null | undefined> {
+    const memVal = this.memoryCache.get(key);
+    if (memVal !== undefined) return memVal;
+
+    if (this.isKvEnabled) {
+      try {
+        // kv.get returns null if key doesn't exist. If we explicitly set null, it also returns null?
+        // Actually, Vercel KV returns null if missing. So we can't distinguish missing from stored null easily unless we wrap it.
+        // Let's just wrap it.
+        const wrapped = await kv.get<{ value: T | null }>(`${this.prefix}:${key}`);
+        if (wrapped !== null) {
+          this.memoryCache.set(key, wrapped.value as any);
+          return wrapped.value;
+        }
+      } catch (error) {
+        console.warn(`[KV Cache] Error getting key ${key}:`, error);
+      }
+    }
+    return undefined; // Not found
+  }
+
+  async set(key: string, value: T | null): Promise<void> {
+    this.memoryCache.set(key, value as any);
+
+    if (this.isKvEnabled) {
+      try {
+        await kv.set(`${this.prefix}:${key}`, { value }, { px: this.ttlMs });
+      } catch (error) {
+        console.warn(`[KV Cache] Error setting key ${key}:`, error);
+      }
+    }
   }
 }

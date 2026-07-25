@@ -1,21 +1,99 @@
 const ALLOWED_TAGS = new Set([
-  "P", "BR", "STRONG", "B", "EM", "I", "U", "S", "A", "UL", "OL", "LI",
-  "H1", "H2", "H3", "H4", "H5", "H6", "TABLE", "THEAD", "TBODY", "TFOOT",
-  "TR", "TD", "TH", "CAPTION", "COLGROUP", "COL", "SPAN", "DIV", "BLOCKQUOTE",
-  "SUB", "SUP", "PRE", "CODE", "HR", "IMG", "MARK"
+  "P",
+  "BR",
+  "STRONG",
+  "B",
+  "EM",
+  "I",
+  "U",
+  "S",
+  "A",
+  "UL",
+  "OL",
+  "LI",
+  "H1",
+  "H2",
+  "H3",
+  "H4",
+  "H5",
+  "H6",
+  "TABLE",
+  "THEAD",
+  "TBODY",
+  "TFOOT",
+  "TR",
+  "TD",
+  "TH",
+  "CAPTION",
+  "COLGROUP",
+  "COL",
+  "SPAN",
+  "DIV",
+  "BLOCKQUOTE",
+  "SUB",
+  "SUP",
+  "PRE",
+  "CODE",
+  "HR",
+  "IMG",
+  "MARK"
 ]);
 
 const DISCARDED_TAGS = new Set(["SCRIPT", "STYLE", "META", "LINK", "OBJECT", "EMBED", "IFRAME", "FORM", "INPUT", "BUTTON"]);
 
 const ALLOWED_STYLES = new Set([
-  "font-weight", "font-style", "font-size", "font-family", "text-decoration", "text-align",
-  "text-indent", "text-transform", "font-variant", "line-height", "letter-spacing", "vertical-align", "white-space",
-  "color", "background-color", "margin", "margin-top", "margin-right", "margin-bottom", "margin-left",
-  "padding", "padding-top", "padding-right", "padding-bottom", "padding-left", "list-style-type",
-  "border", "border-top", "border-right", "border-bottom", "border-left", "border-collapse",
-  "border-color", "border-style", "border-width", "table-layout", "direction", "unicode-bidi",
-  "width", "height", "min-width", "max-width", "page-break-before", "page-break-after", "page-break-inside",
-  "break-before", "break-after", "break-inside", "orphans", "widows", "word-spacing", "tab-size"
+  "font-weight",
+  "font-style",
+  "font-size",
+  "font-family",
+  "text-decoration",
+  "text-align",
+  "text-indent",
+  "text-transform",
+  "font-variant",
+  "line-height",
+  "letter-spacing",
+  "vertical-align",
+  "white-space",
+  "color",
+  "background-color",
+  "margin",
+  "margin-top",
+  "margin-right",
+  "margin-bottom",
+  "margin-left",
+  "padding",
+  "padding-top",
+  "padding-right",
+  "padding-bottom",
+  "padding-left",
+  "list-style-type",
+  "border",
+  "border-top",
+  "border-right",
+  "border-bottom",
+  "border-left",
+  "border-collapse",
+  "border-color",
+  "border-style",
+  "border-width",
+  "table-layout",
+  "direction",
+  "unicode-bidi",
+  "width",
+  "height",
+  "min-width",
+  "max-width",
+  "page-break-before",
+  "page-break-after",
+  "page-break-inside",
+  "break-before",
+  "break-after",
+  "break-inside",
+  "orphans",
+  "widows",
+  "word-spacing",
+  "tab-size"
 ]);
 
 const SAFE_WORD_CLASS = /^(?:Mso[\w-]*|WordSection\d+|Nezbig[\w-]*|nezbig-[\w-]+)$/i;
@@ -54,9 +132,7 @@ export function plainTextFromRichHtml(input: string): string {
 
   const candidates = Array.from(document.body.querySelectorAll<HTMLElement>(blockSelector));
   const blocks = candidates.filter((element) => element.querySelector(blockSelector) === null);
-  const raw = blocks.length > 0
-    ? blocks.map(read).join("\n\n")
-    : Array.from(document.body.childNodes).map(read).join("");
+  const raw = blocks.length > 0 ? blocks.map(read).join("\n\n") : Array.from(document.body.childNodes).map(read).join("");
 
   return raw
     .replace(/[ \t]+\n/g, "\n")
@@ -72,7 +148,10 @@ function parseAllowedDeclarations(cssText: string): Map<string, string> {
     const separator = declaration.indexOf(":");
     if (separator === -1) continue;
     const property = declaration.slice(0, separator).trim().toLowerCase();
-    const value = declaration.slice(separator + 1).replace(/!important\s*$/i, "").trim();
+    const value = declaration
+      .slice(separator + 1)
+      .replace(/!important\s*$/i, "")
+      .trim();
     if (isAllowedStyle(property) && value && isSafeStyleValue(value)) {
       declarations.set(property, value);
     }
@@ -83,7 +162,9 @@ function parseAllowedDeclarations(cssText: string): Map<string, string> {
 function collectWordStyles(document: Document): WeakMap<Element, Map<string, string>> {
   const rulesByClass = new Map<string, Map<string, string>>();
   const stylesByElement = new WeakMap<Element, Map<string, string>>();
-  const css = Array.from(document.querySelectorAll("style")).map((style) => style.textContent ?? "").join("\n");
+  const css = Array.from(document.querySelectorAll("style"))
+    .map((style) => style.textContent ?? "")
+    .join("\n");
   const rulePattern = /([^{}]+)\{([^{}]*)\}/g;
   let match: RegExpExecArray | null;
 

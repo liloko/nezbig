@@ -50,9 +50,10 @@ export type SearchCandidate = {
   url: string;
   snippet: string;
   query?: string;
-  provider?: string;
+  provider: string;
   sourceText?: string;
   verifiedTextLength?: number;
+  relevanceScore?: number;
 };
 
 export type SearchProviderDiagnostic = {

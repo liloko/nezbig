@@ -1,6 +1,6 @@
 import { normalizeWhitespace } from "./chunking.js";
 import { FullTextIndex } from "./fullTextIndex.js";
-import { tokenize, clampScore, stableHash, overlapRatio, buildNgrams, } from "./utils/textUtils.js";
+import { tokenize, clampScore, stableHash, overlapRatio, buildNgrams } from "./utils/textUtils.js";
 function longestCommonRun(source, candidate) {
     const candidatePositions = new Map();
     candidate.forEach((token, index) => {
@@ -91,11 +91,7 @@ export function scoreCandidate(chunkText, candidate, chunkIndex) {
     const runScore = Math.min(1, longestRun / 15);
     const phraseScore = Math.max(threeGramOverlap * 0.75, fiveGramOverlap);
     const pageBonus = candidate.sourceText ? 1 : 0.72;
-    const score = clampScore((overlapPercent * 0.1 +
-        phraseScore * 0.3 +
-        runScore * 0.24 +
-        hashOverlap * 0.26 +
-        fullTextRank * 0.1) * 100 * pageBonus);
+    const score = clampScore((overlapPercent * 0.1 + phraseScore * 0.3 + runScore * 0.24 + hashOverlap * 0.26 + fullTextRank * 0.1) * 100 * pageBonus);
     return {
         ...candidate,
         chunkIndex,
@@ -107,11 +103,7 @@ export function scoreCandidate(chunkText, candidate, chunkIndex) {
         longestRun,
         confidence: candidate.sourceText ? "page" : "snippet",
         excerpt: normalizeWhitespace(chunkText).split(" ").slice(0, 48).join(" "),
-        submittedEvidence: longestRun >= 5
-            ? sourceRunTokens.slice(commonRun.sourceStart, commonRun.sourceStart + longestRun).join(" ")
-            : undefined,
-        sourceEvidence: longestRun >= 5 && candidate.sourceText
-            ? candidateRunTokens.slice(commonRun.candidateStart, commonRun.candidateStart + longestRun).join(" ")
-            : undefined
+        submittedEvidence: longestRun >= 5 ? sourceRunTokens.slice(commonRun.sourceStart, commonRun.sourceStart + longestRun).join(" ") : undefined,
+        sourceEvidence: longestRun >= 5 && candidate.sourceText ? candidateRunTokens.slice(commonRun.candidateStart, commonRun.candidateStart + longestRun).join(" ") : undefined
     };
 }

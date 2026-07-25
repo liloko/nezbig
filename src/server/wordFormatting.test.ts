@@ -7,22 +7,26 @@ describe("Word formatting preservation", () => {
     expect(options.ignoreEmptyParagraphs).toBe(false);
     const transformed = options.transformDocument({
       type: "document",
-      children: [{
-        type: "paragraph",
-        styleId: null,
-        styleName: null,
-        alignment: "center",
-        indent: { start: "720", end: null, firstLine: "360", hanging: null },
-        numbering: null,
-        children: [{
-          type: "run",
+      children: [
+        {
+          type: "paragraph",
           styleId: null,
           styleName: null,
-          font: "Times New Roman",
-          fontSize: 14,
-          children: [{ type: "text", value: "Назва" }]
-        }]
-      }]
+          alignment: "center",
+          indent: { start: "720", end: null, firstLine: "360", hanging: null },
+          numbering: null,
+          children: [
+            {
+              type: "run",
+              styleId: null,
+              styleName: null,
+              font: "Times New Roman",
+              fontSize: 14,
+              children: [{ type: "text", value: "Назва" }]
+            }
+          ]
+        }
+      ]
     });
 
     expect(transformed.children).toHaveLength(1);
@@ -38,7 +42,7 @@ describe("Word formatting preservation", () => {
     expect(html).toContain("text-align:center");
     expect(html).toContain("margin-left:36pt");
     expect(html).toContain("text-indent:18pt");
-    expect(html).toContain('font-family:&quot;Times New Roman&quot;');
+    expect(html).toContain("font-family:&quot;Times New Roman&quot;");
     expect(html).toContain("font-size:14pt");
   });
 
@@ -46,15 +50,17 @@ describe("Word formatting preservation", () => {
     const options = createWordHtmlOptions();
     const transformed = options.transformDocument({
       type: "document",
-      children: [{
-        type: "paragraph",
-        styleId: null,
-        styleName: null,
-        alignment: "left",
-        indent: { start: "720", end: null, firstLine: null, hanging: "360" },
-        numbering: { isOrdered: true, level: "0" },
-        children: [{ type: "run", styleId: null, font: "Arial", fontSize: 11, children: [] }]
-      }]
+      children: [
+        {
+          type: "paragraph",
+          styleId: null,
+          styleName: null,
+          alignment: "left",
+          indent: { start: "720", end: null, firstLine: null, hanging: "360" },
+          numbering: { isOrdered: true, level: "0" },
+          children: [{ type: "run", styleId: null, font: "Arial", fontSize: 11, children: [] }]
+        }
+      ]
     });
 
     expect(transformed.children).toHaveLength(1);

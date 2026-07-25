@@ -6,16 +6,11 @@ describe("mergeRevisedTextIntoHtml", () => {
   it("keeps Word-like block and inline formatting around revised words", () => {
     const originalHtml = [
       '<h1 style="text-align:center">Назва роботи</h1>',
-      '<p>Це <strong>важливий</strong> аспект дослідження.</p>',
-      '<ul><li><em>Перший</em> пункт списку</li></ul>',
-      '<table><tbody><tr><td>Комірка таблиці</td></tr></tbody></table>'
+      "<p>Це <strong>важливий</strong> аспект дослідження.</p>",
+      "<ul><li><em>Перший</em> пункт списку</li></ul>",
+      "<table><tbody><tr><td>Комірка таблиці</td></tr></tbody></table>"
     ].join("");
-    const revisedText = [
-      "Назва роботи",
-      "Це головний аспект дослідження.",
-      "Перший пункт списку",
-      "Комірка таблиці"
-    ].join("\n\n");
+    const revisedText = ["Назва роботи", "Це головний аспект дослідження.", "Перший пункт списку", "Комірка таблиці"].join("\n\n");
 
     const revisedHtml = mergeRevisedTextIntoHtml(originalHtml, revisedText);
     const $ = load(revisedHtml, null, false);

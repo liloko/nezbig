@@ -139,7 +139,8 @@ describe("htmlFromPlainText", () => {
   });
 
   it("reconstructs paragraph boundaries from formatted HTML", () => {
-    expect(plainTextFromRichHtml("<h1>Назва</h1><p>Перший <strong>абзац</strong>.</p><ul><li>Пункт</li></ul><table><tr><td>А</td><td>Б</td></tr></table>"))
-      .toBe("Назва\n\nПерший абзац.\n\nПункт\n\nА\n\nБ");
+    expect(plainTextFromRichHtml("<h1>Назва</h1><p>Перший <strong>абзац</strong>.</p><ul><li>Пункт</li></ul><table><tr><td>А</td><td>Б</td></tr></table>")).toBe(
+      "Назва\n\nПерший абзац.\n\nПункт\n\nА\n\nБ"
+    );
   });
 });

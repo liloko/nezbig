@@ -6,7 +6,9 @@ const DEFAULT_NIM_MODELS = ["nvidia/llama-3.1-nemotron-ultra-253b-v1", "meta/lla
 function getNvidiaConfig() {
     const apiKey = process.env.NVIDIA_NIM_API_KEY?.trim() || process.env.NVIDIA_API_KEY?.trim();
     const primaryModel = process.env.NVIDIA_NIM_MODEL?.trim();
-    const envFallbacks = process.env.NVIDIA_NIM_FALLBACK_MODELS?.split(",").map((model) => model.trim()).filter(Boolean) ?? [];
+    const envFallbacks = process.env.NVIDIA_NIM_FALLBACK_MODELS?.split(",")
+        .map((model) => model.trim())
+        .filter(Boolean) ?? [];
     const models = [...new Set([primaryModel, ...envFallbacks, ...DEFAULT_NIM_MODELS].filter(Boolean))];
     if (!apiKey || models.length === 0)
         return null;

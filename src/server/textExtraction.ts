@@ -96,10 +96,7 @@ export async function extractTextFromUpload(file: Express.Multer.File): Promise<
     text = file.buffer.toString("utf8");
   } else if (extractionMethod === "docx") {
     const wordHtmlOptions = createWordHtmlOptions();
-    const [textResult, htmlResult] = await Promise.all([
-      mammoth.extractRawText({ buffer: file.buffer }),
-      mammoth.convertToHtml({ buffer: file.buffer }, wordHtmlOptions)
-    ]);
+    const [textResult, htmlResult] = await Promise.all([mammoth.extractRawText({ buffer: file.buffer }), mammoth.convertToHtml({ buffer: file.buffer }, wordHtmlOptions)]);
     text = textResult.value;
     html = htmlResult.value ? withWordFormattingStyles(htmlResult.value, wordHtmlOptions) : undefined;
   } else if (extractionMethod === "pdf") {

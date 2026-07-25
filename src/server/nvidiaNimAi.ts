@@ -25,7 +25,10 @@ const DEFAULT_NIM_MODELS = ["nvidia/llama-3.1-nemotron-ultra-253b-v1", "meta/lla
 function getNvidiaConfig(): { apiKey: string; models: string[] } | null {
   const apiKey = process.env.NVIDIA_NIM_API_KEY?.trim() || process.env.NVIDIA_API_KEY?.trim();
   const primaryModel = process.env.NVIDIA_NIM_MODEL?.trim();
-  const envFallbacks = process.env.NVIDIA_NIM_FALLBACK_MODELS?.split(",").map((model) => model.trim()).filter(Boolean) ?? [];
+  const envFallbacks =
+    process.env.NVIDIA_NIM_FALLBACK_MODELS?.split(",")
+      .map((model) => model.trim())
+      .filter(Boolean) ?? [];
   const models = [...new Set([primaryModel, ...envFallbacks, ...DEFAULT_NIM_MODELS].filter(Boolean) as string[])];
 
   if (!apiKey || models.length === 0) return null;
@@ -95,15 +98,13 @@ function parseNimResult(content: string, model: string, attemptedModels: string[
     }>;
   };
   const probability = asScore(parsed.probability);
-  const signals = (Array.isArray(parsed.signals) ? parsed.signals : []).slice(0, 6).map(
-    (signal): AiSignal => ({
-      label: String(signal.label || "NVIDIA NIM AI Оцінка").slice(0, 80),
-      score: asScore(signal.score),
-      detail: String(signal.detail || "Модель NVIDIA NIM визначила це як релевантний авторський сигнал.").slice(0, 280),
-      category: "pattern",
-      evidence: Array.isArray(signal.evidence) ? signal.evidence.map((item) => String(item).slice(0, 140)).slice(0, 4) : []
-    })
-  );
+  const signals = (Array.isArray(parsed.signals) ? parsed.signals : []).slice(0, 6).map((signal): AiSignal => ({
+    label: String(signal.label || "NVIDIA NIM AI Оцінка").slice(0, 80),
+    score: asScore(signal.score),
+    detail: String(signal.detail || "Модель NVIDIA NIM визначила це як релевантний авторський сигнал.").slice(0, 280),
+    category: "pattern",
+    evidence: Array.isArray(signal.evidence) ? signal.evidence.map((item) => String(item).slice(0, 140)).slice(0, 4) : []
+  }));
 
   return {
     aiProbability: probability,

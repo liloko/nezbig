@@ -1,22 +1,8 @@
 import { normalizeWhitespace } from "./chunking.js";
 import { detectAiLanguageCoverage } from "./aiLanguage.js";
 import { prepareAiAnalysisText } from "./aiTextPreprocess.js";
-import type {
-  AiContentExclusions,
-  AiLanguageCoverage,
-  AiReliability,
-  AiSignal,
-  AiSuspiciousSegment,
-  AiVerdict
-} from "../shared/types.js";
-import {
-  tokenize,
-  splitSentences,
-  clampScore,
-  coefficientOfVariation,
-  countRegexMatches,
-  sampleEvidence,
-} from "./utils/textUtils.js";
+import type { AiContentExclusions, AiLanguageCoverage, AiReliability, AiSignal, AiSuspiciousSegment, AiVerdict } from "../shared/types.js";
+import { tokenize, splitSentences, clampScore, coefficientOfVariation, countRegexMatches, sampleEvidence } from "./utils/textUtils.js";
 
 type SignalDraft = AiSignal & {
   weight: number;
@@ -32,9 +18,31 @@ export type AiDetectionResult = {
   suspiciousSegments: AiSuspiciousSegment[];
 };
 
+export const AI_SCORING_WEIGHTS = {
+  statistical: 0.38,
+  pattern: 0.42,
+  structure: 0.2
+};
+
 const TRANSITIONS = new Set([
-  "therefore", "however", "moreover", "furthermore", "additionally", "consequently", "overall",
-  "важливо", "отже", "проте", "однак", "таким", "загалом", "водночас", "натомість", "по-перше", "по-друге", "насамкінець"
+  "therefore",
+  "however",
+  "moreover",
+  "furthermore",
+  "additionally",
+  "consequently",
+  "overall",
+  "важливо",
+  "отже",
+  "проте",
+  "однак",
+  "таким",
+  "загалом",
+  "водночас",
+  "натомість",
+  "по-перше",
+  "по-друге",
+  "насамкінець"
 ]);
 
 const HEDGES = new Set(["may", "might", "could", "typically", "often", "може", "ймовірно", "зазвичай", "часто", "можливо", "потенційно"]);
@@ -112,13 +120,13 @@ function isSectionHeading(sentence: string): boolean {
     .replace(/\s+/g, " ")
     .trim();
   if (tokenize(normalized, true).length > 8) return false;
-  return /^(?:зміст|вступ|висновки|список використаних джерел|розділ\s+(?:[0-9]+|[ivx]+)(?:\s+.+)?|introduction|conclusion|references|chapter\s+(?:[0-9]+|[ivx]+)(?:\s+.+)?)$/iu.test(normalized);
+  return /^(?:зміст|вступ|висновки|список використаних джерел|розділ\s+(?:[0-9]+|[ivx]+)(?:\s+.+)?|introduction|conclusion|references|chapter\s+(?:[0-9]+|[ivx]+)(?:\s+.+)?)$/iu.test(
+    normalized
+  );
 }
 
 function sentenceStartRepetition(sentences: string[]): { score: number; evidence: string[] } {
-  const starts = sentences
-    .map((sentence) => tokenize(sentence, true).slice(0, 3).join(" "))
-    .filter((start) => start.length > 4);
+  const starts = sentences.map((sentence) => tokenize(sentence, true).slice(0, 3).join(" ")).filter((start) => start.length > 4);
   const counts = new Map<string, number>();
   for (const start of starts) counts.set(start, (counts.get(start) ?? 0) + 1);
   const repeated = [...counts.entries()].filter(([, count]) => count >= 2);
@@ -138,7 +146,10 @@ function ngramRepetition(tokens: string[]): { score: number; evidence: string[] 
 }
 
 function impersonalAcademicVoice(text: string, wordCount: number): { score: number; evidence: string[] } {
-  const matches = countRegexMatches(text, /(?<![\p{L}\p{N}_])(?:розглянуто|проаналізовано|досліджено|визначено|встановлено|узагальнено|систематизовано|обґрунтовано|виявлено|сформовано|запропоновано|охарактеризовано)(?![\p{L}\p{N}_])/giu);
+  const matches = countRegexMatches(
+    text,
+    /(?<![\p{L}\p{N}_])(?:розглянуто|проаналізовано|досліджено|визначено|встановлено|узагальнено|систематизовано|обґрунтовано|виявлено|сформовано|запропоновано|охарактеризовано)(?![\p{L}\p{N}_])/giu
+  );
   const density = matches.length / Math.max(1, wordCount / 240);
   return {
     score: clampScore(Math.min(1, density / 2.4) * 100),
@@ -151,7 +162,7 @@ function safeguardScore(normalized: string, wordCount: number, placeholderText: 
   const numbers = countRegexMatches(normalized, /\b\d+(?:[.,]\d+)?\s*(?:%|грн|uah|usd|км|м|року|р\.|рік|years?)?\b/giu);
   const firstPerson = countRegexMatches(normalized, /(?<![\p{L}\p{N}_])(?:я|мені|мою|моє|ми|наш|наша|i|my|we|our)(?![\p{L}\p{N}_])/giu);
   const quotes = countRegexMatches(normalized, /["“„«][^"”»]{12,}["”»]/gu);
-  
+
   const evidence = [
     citations.length ? `${citations.length} посилань або бібліографічних маркерів` : "",
     numbers.length >= 3 ? `${numbers.length} числових/фактичних маркерів` : "",
@@ -162,7 +173,15 @@ function safeguardScore(normalized: string, wordCount: number, placeholderText: 
     academicStructure ? "академічна структура: вступ, розділи або висновки не вважаються AI-ознакою" : ""
   ].filter(Boolean);
 
-  const score = clampScore(citations.length * 12 + Math.min(20, numbers.length * 2.5) + Math.min(15, firstPerson.length * 3.5) + quotes.length * 10 + (wordCount < 180 ? 15 : 0) + (placeholderText ? 85 : 0) + (academicStructure ? 25 : 0));
+  const score = clampScore(
+    citations.length * 12 +
+      Math.min(20, numbers.length * 2.5) +
+      Math.min(15, firstPerson.length * 3.5) +
+      quotes.length * 10 +
+      (wordCount < 180 ? 15 : 0) +
+      (placeholderText ? 85 : 0) +
+      (academicStructure ? 25 : 0)
+  );
   return { score, evidence };
 }
 
@@ -196,7 +215,7 @@ function analyzeSinglePass(text: string): { probability: number; signals: AiSign
   const sentences = splitSentences(normalized);
   const proseSentences = sentences.filter((sentence) => !isSectionHeading(sentence));
   const wordCount = words.length;
-  
+
   if (wordCount < 10) return { probability: 0, signals: [] };
 
   const mattr = movingAverageTypeTokenRatio(words);
@@ -204,7 +223,7 @@ function analyzeSinglePass(text: string): { probability: number; signals: AiSign
   const sentenceCv = coefficientOfVariation(sentenceLengths);
   const transitionDensity = words.filter((word) => TRANSITIONS.has(word)).length / Math.max(1, wordCount);
   const hedgeDensity = words.filter((word) => HEDGES.has(word)).length / Math.max(1, wordCount);
-  
+
   const placeholderText = looksLikePlaceholderText(normalized);
   const academicStructure = hasAcademicStructure(normalized);
   const repeatedStarts = sentenceStartRepetition(proseSentences);
@@ -216,10 +235,10 @@ function analyzeSinglePass(text: string): { probability: number; signals: AiSign
   const lexicalScore = clampScore(Math.max(0, 0.82 - mattr) * 190 + repeatedNgrams.score * 0.45);
   const transitionScore = clampScore(transitionDensity * 3500);
   const hedgeScore = clampScore(hedgeDensity * 3500);
-  
+
   const punctuationTypes = new Set((normalized.replace(/--|—|–/g, "").match(/[;:!?()[\]]/g) ?? []).map((value) => value));
   const punctuationScore = clampScore(sentences.length >= 6 && punctuationTypes.size <= 1 ? 25 : 0);
-  
+
   const corroboratedFloor = repeatedNgrams.score > 60 ? repeatedNgrams.score * 0.6 : 0;
 
   const patternBased = AI_PATTERN_GROUPS.map((group) => {
@@ -232,9 +251,7 @@ function analyzeSinglePass(text: string): { probability: number; signals: AiSign
       score,
       category: group.category,
       evidence: sampleEvidence(matches),
-      detail: matches.length > 0
-          ? `Знайдено ${matches.length} маркерів. Вони часто зустрічаються у згенерованих текстах.`
-          : "Явних маркерів цієї групи не знайдено.",
+      detail: matches.length > 0 ? `Знайдено ${matches.length} маркерів. Вони часто зустрічаються у згенерованих текстах.` : "Явних маркерів цієї групи не знайдено.",
       weight: group.weight
     };
   });
@@ -244,7 +261,8 @@ function analyzeSinglePass(text: string): { probability: number; signals: AiSign
       label: "Рівномірність речень (Low Burstiness)",
       score: rhythmScore,
       category: "statistical",
-      detail: rhythmScore >= 50
+      detail:
+        rhythmScore >= 50
           ? `Текст має надто рівномірну структуру речень (CV: ${sentenceCv.toFixed(2)}). Людський текст зазвичай чергує довгі й короткі речення, ШІ пише "гладко".`
           : "Варіативність довжини речень виглядає природною.",
       evidence: sentences.length >= 2 ? sentenceLengths.slice(0, 8).map((length) => `${length} слів`) : [],
@@ -254,7 +272,8 @@ function analyzeSinglePass(text: string): { probability: number; signals: AiSign
       label: "Лексична одноманітність",
       score: lexicalScore,
       category: "statistical",
-      detail: lexicalScore >= 50
+      detail:
+        lexicalScore >= 50
           ? `Локальна різноманітність словника низька або є повторювані фрази (MATTR: ${Math.round(mattr * 100)}%).`
           : `Локальна різноманітність словника не виглядає підозрілою (MATTR: ${Math.round(mattr * 100)}%).`,
       evidence: [`локальна унікальність словника ${Math.round(mattr * 100)}%`, ...repeatedNgrams.evidence].slice(0, 5),
@@ -264,7 +283,10 @@ function analyzeSinglePass(text: string): { probability: number; signals: AiSign
       label: "Часті формальні переходи",
       score: transitionScore,
       category: "pattern",
-      detail: transitionScore >= 40 ? "Висока концентрація слів-зв'язок (тому, однак, крім того), що часто використовуються мовними моделями для логічної 'склейки'." : "Перехідні слова у нормі.",
+      detail:
+        transitionScore >= 40
+          ? "Висока концентрація слів-зв'язок (тому, однак, крім того), що часто використовуються мовними моделями для логічної 'склейки'."
+          : "Перехідні слова у нормі.",
       evidence: sampleEvidence(words.filter((word) => TRANSITIONS.has(word))),
       weight: 0.85
     },
@@ -272,7 +294,8 @@ function analyzeSinglePass(text: string): { probability: number; signals: AiSign
       label: "Обережні формулювання",
       score: hedgeScore,
       category: "pattern",
-      detail: hedgeScore >= 40 ? "У тексті часто повторюються модальні або обережні слова; ця ознака враховується лише разом з іншими сигналами." : "Обережні формулювання не домінують.",
+      detail:
+        hedgeScore >= 40 ? "У тексті часто повторюються модальні або обережні слова; ця ознака враховується лише разом з іншими сигналами." : "Обережні формулювання не домінують.",
       evidence: sampleEvidence(words.filter((word) => HEDGES.has(word))),
       weight: 0.45
     },
@@ -280,23 +303,30 @@ function analyzeSinglePass(text: string): { probability: number; signals: AiSign
       label: "Повтори на початку речень",
       score: repeatedStarts.score,
       category: "structure",
-      detail: repeatedStarts.score >= 40 ? "Виявлено шаблони у початку речень. ШІ схильний починати кілька речень поспіль однаковими конструкціями." : "Початки речень різноманітні.",
+      detail:
+        repeatedStarts.score >= 40 ? "Виявлено шаблони у початку речень. ШІ схильний починати кілька речень поспіль однаковими конструкціями." : "Початки речень різноманітні.",
       evidence: repeatedStarts.evidence,
       weight: 0.75
     },
     {
-        label: "Безособовий стиль",
-        score: impersonalVoice.score,
-        category: "pattern",
-        detail: impersonalVoice.score >= 45 ? "Стиль написання відсторонений та надто об'єктивізований. Хоча це типово для науки, надмірна кількість таких слів — маркер ШІ." : "Стиль подачі не виглядає шаблонно-академічним.",
-        evidence: impersonalVoice.evidence,
-        weight: 0.95
+      label: "Безособовий стиль",
+      score: impersonalVoice.score,
+      category: "pattern",
+      detail:
+        impersonalVoice.score >= 45
+          ? "Стиль написання відсторонений та надто об'єктивізований. Хоча це типово для науки, надмірна кількість таких слів — маркер ШІ."
+          : "Стиль подачі не виглядає шаблонно-академічним.",
+      evidence: impersonalVoice.evidence,
+      weight: 0.95
     },
     {
       label: "Одноманітна пунктуація",
       score: punctuationScore,
       category: "structure",
-      detail: punctuationScore >= 25 ? "Пунктуація надто проста або рівна. Людські автори частіше використовують дужки, крапки з комою, тире або окличні знаки (подвійні дефіси не рахуються)." : "Пунктуаційний малюнок не виглядає шаблонним.",
+      detail:
+        punctuationScore >= 25
+          ? "Пунктуація надто проста або рівна. Людські автори частіше використовують дужки, крапки з комою, тире або окличні знаки (подвійні дефіси не рахуються)."
+          : "Пунктуаційний малюнок не виглядає шаблонним.",
       evidence: punctuationTypes.size ? [`${punctuationTypes.size} типів пунктуації`] : [],
       weight: 0.5
     },
@@ -309,7 +339,7 @@ function analyzeSinglePass(text: string): { probability: number; signals: AiSign
   const patternChannel = strongestChannelScore(signalDrafts, "pattern");
   const structureChannel = strongestChannelScore(signalDrafts, "structure");
   const activeChannels = [statisticalChannel, patternChannel, structureChannel].filter((score) => score >= 14).length;
-  const weightedRaw = statisticalChannel * 0.38 + patternChannel * 0.42 + structureChannel * 0.2;
+  const weightedRaw = statisticalChannel * AI_SCORING_WEIGHTS.statistical + patternChannel * AI_SCORING_WEIGHTS.pattern + structureChannel * AI_SCORING_WEIGHTS.structure;
   const corroboration = activeChannels >= 3 ? 1.1 : activeChannels === 2 ? 1 : 0.78;
   const lengthAdjust = wordCount < 60 ? 0.6 : wordCount < 120 ? 0.8 : wordCount < 200 ? 0.95 : 1.0;
   let rawProbability = weightedRaw * corroboration * lengthAdjust;
@@ -322,15 +352,8 @@ function analyzeSinglePass(text: string): { probability: number; signals: AiSign
     .sort((left, right) => right - left)
     .slice(0, 3)
     .reduce((sum, score, _index, scores) => sum + score / Math.max(1, scores.length), 0);
-  const evidenceFloor = promptLeak >= 40
-    ? 45
-    : evidenceSignals.length >= 3
-      ? Math.max(22, strongAverage * 0.5)
-      : weakEvidenceSignals.length >= 5
-        ? 12
-        : weakEvidenceSignals.length >= 2
-          ? 5
-          : 0;
+  const evidenceFloor =
+    promptLeak >= 40 ? 45 : evidenceSignals.length >= 3 ? Math.max(22, strongAverage * 0.5) : weakEvidenceSignals.length >= 5 ? 12 : weakEvidenceSignals.length >= 2 ? 5 : 0;
   const probability = clampScore(placeholderText ? Math.min(10, weightedRaw) : Math.max(rawProbability, corroboratedFloor, evidenceFloor));
 
   const signals: AiSignal[] = signalDrafts
@@ -387,13 +410,7 @@ function percentile(values: number[], ratio: number): number {
   return sorted[index];
 }
 
-function estimateReliability(
-  wordCount: number,
-  windowScores: number[],
-  evidenceSignals: AiSignal[],
-  language: AiLanguageCoverage,
-  exclusions: AiContentExclusions
-): AiReliability {
+function estimateReliability(wordCount: number, windowScores: number[], evidenceSignals: AiSignal[], language: AiLanguageCoverage, exclusions: AiContentExclusions): AiReliability {
   const segmentCount = windowScores.length;
   const minimum = windowScores.length ? Math.min(...windowScores) : 0;
   const maximum = windowScores.length ? Math.max(...windowScores) : 0;
@@ -413,19 +430,20 @@ function estimateReliability(
 
   const level: AiReliability["level"] = score >= 72 ? "high" : score >= 45 ? "medium" : "low";
   const excludedWords = exclusions.codeWords + exclusions.quotedWords + exclusions.referenceWords;
-  let reason = wordCount < 80
-    ? "Після вилучення коду, цитат і службових частин лишилося замало авторського тексту для стилометричного висновку."
-    : language.code === "limited"
-      ? language.reason
-      : wordCount < 120
-    ? "Текст надто короткий для стійкого стилометричного висновку."
-    : segmentSpread >= 45
-      ? "Сегменти сильно відрізняються між собою; документ може мати змішане походження або різні жанри."
-      : segmentCount < 3
-        ? "Для перевірки доступно мало незалежних сегментів."
-        : level === "high"
-          ? "Обсяг достатній, а сегментні оцінки узгоджені."
-          : "Оцінка має помірну доказовість і потребує ручної перевірки сигналів.";
+  let reason =
+    wordCount < 80
+      ? "Після вилучення коду, цитат і службових частин лишилося замало авторського тексту для стилометричного висновку."
+      : language.code === "limited"
+        ? language.reason
+        : wordCount < 120
+          ? "Текст надто короткий для стійкого стилометричного висновку."
+          : segmentSpread >= 45
+            ? "Сегменти сильно відрізняються між собою; документ може мати змішане походження або різні жанри."
+            : segmentCount < 3
+              ? "Для перевірки доступно мало незалежних сегментів."
+              : level === "high"
+                ? "Обсяг достатній, а сегментні оцінки узгоджені."
+                : "Оцінка має помірну доказовість і потребує ручної перевірки сигналів.";
   if (excludedWords > 0 && wordCount >= 80) {
     reason += ` Неавторський або технічний вміст вилучено: ${excludedWords} слів.`;
   }
@@ -480,19 +498,20 @@ export function detectAiSignals(rawText: string): AiDetectionResult {
   const reliability = estimateReliability(wordCount, windowScores, documentResult.signals, language, prepared.exclusions);
   const segments = suspiciousSegments(windows, windowResults);
 
-  const exclusionSignal: AiSignal | null = prepared.exclusions.codeWords + prepared.exclusions.quotedWords + prepared.exclusions.referenceWords > 0
-    ? {
-        label: "Вилучений неавторський вміст",
-        score: 0,
-        category: "safeguard",
-        detail: "Код, довгі цитати та бібліографічний хвіст не беруть участі в оцінці авторського стилю.",
-        evidence: [
-          prepared.exclusions.codeWords ? `${prepared.exclusions.codeWords} слів коду` : "",
-          prepared.exclusions.quotedWords ? `${prepared.exclusions.quotedWords} слів у довгих цитатах` : "",
-          prepared.exclusions.referenceWords ? `${prepared.exclusions.referenceWords} слів у списку джерел` : ""
-        ].filter(Boolean)
-      }
-    : null;
+  const exclusionSignal: AiSignal | null =
+    prepared.exclusions.codeWords + prepared.exclusions.quotedWords + prepared.exclusions.referenceWords > 0
+      ? {
+          label: "Вилучений неавторський вміст",
+          score: 0,
+          category: "safeguard",
+          detail: "Код, довгі цитати та бібліографічний хвіст не беруть участі в оцінці авторського стилю.",
+          evidence: [
+            prepared.exclusions.codeWords ? `${prepared.exclusions.codeWords} слів коду` : "",
+            prepared.exclusions.quotedWords ? `${prepared.exclusions.quotedWords} слів у довгих цитатах` : "",
+            prepared.exclusions.referenceWords ? `${prepared.exclusions.referenceWords} слів у списку джерел` : ""
+          ].filter(Boolean)
+        }
+      : null;
 
   if (windows.length <= 1) {
     const signals = exclusionSignal ? [...documentResult.signals, exclusionSignal] : documentResult.signals;
@@ -508,12 +527,7 @@ export function detectAiSignals(rawText: string): AiDetectionResult {
   const topScores = [...windowScores].sort((left, right) => right - left).slice(0, Math.min(3, windowScores.length));
   const topAverage = topScores.reduce((sum, score) => sum + score, 0) / Math.max(1, topScores.length);
 
-  const ensembleScore =
-    documentResult.probability * 0.36 +
-    median * 0.14 +
-    upperQuartile * 0.2 +
-    topAverage * 0.22 +
-    suspiciousCoverage * 100 * 0.08;
+  const ensembleScore = documentResult.probability * 0.36 + median * 0.14 + upperQuartile * 0.2 + topAverage * 0.22 + suspiciousCoverage * 100 * 0.08;
   const localizedFloor = strongest >= 35 ? strongest * 0.56 : topAverage >= 24 ? topAverage * 0.48 : 0;
   const probability = clampScore(Math.max(ensembleScore, localizedFloor));
 
@@ -521,9 +535,10 @@ export function detectAiSignals(rawText: string): AiDetectionResult {
     label: "Сегментна узгодженість AI-ознак",
     score: clampScore(upperQuartile),
     category: "statistical",
-    detail: suspiciousWindows > 0
-      ? `Підозрілі ознаки зосереджені у ${suspiciousWindows} з ${windowScores.length} повністю перевірених сегментів. Для ручної перевірки нижче наведено координати найсильніших ділянок.`
-      : `У ${windowScores.length} сегментах немає стійкого кластера AI-ознак; оцінка залишається низькою або невизначеною.`,
+    detail:
+      suspiciousWindows > 0
+        ? `Підозрілі ознаки зосереджені у ${suspiciousWindows} з ${windowScores.length} повністю перевірених сегментів. Для ручної перевірки нижче наведено координати найсильніших ділянок.`
+        : `У ${windowScores.length} сегментах немає стійкого кластера AI-ознак; оцінка залишається низькою або невизначеною.`,
     evidence: [...windowScores]
       .map((score, index) => ({ score, index }))
       .sort((a, b) => b.score - a.score)

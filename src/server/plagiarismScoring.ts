@@ -1,13 +1,7 @@
 ﻿import { normalizeWhitespace } from "./chunking.js";
 import { FullTextIndex } from "./fullTextIndex.js";
 import type { PlagiarismMatch, SearchCandidate } from "../shared/types.js";
-import {
-  tokenize,
-  clampScore,
-  stableHash,
-  overlapRatio,
-  buildNgrams,
-} from "./utils/textUtils.js";
+import { tokenize, clampScore, stableHash, overlapRatio, buildNgrams } from "./utils/textUtils.js";
 
 type CommonRun = {
   length: number;
@@ -114,13 +108,7 @@ export function scoreCandidate(chunkText: string, candidate: SearchCandidate, ch
   const phraseScore = Math.max(threeGramOverlap * 0.75, fiveGramOverlap);
   const pageBonus = candidate.sourceText ? 1 : 0.72;
 
-  const score = clampScore(
-    (overlapPercent * 0.1 +
-     phraseScore * 0.3 +
-     runScore * 0.24 +
-     hashOverlap * 0.26 +
-     fullTextRank * 0.1) * 100 * pageBonus
-  );
+  const score = clampScore((overlapPercent * 0.1 + phraseScore * 0.3 + runScore * 0.24 + hashOverlap * 0.26 + fullTextRank * 0.1) * 100 * pageBonus);
 
   return {
     ...candidate,
@@ -133,11 +121,7 @@ export function scoreCandidate(chunkText: string, candidate: SearchCandidate, ch
     longestRun,
     confidence: candidate.sourceText ? "page" : "snippet",
     excerpt: normalizeWhitespace(chunkText).split(" ").slice(0, 48).join(" "),
-    submittedEvidence: longestRun >= 5
-      ? sourceRunTokens.slice(commonRun.sourceStart, commonRun.sourceStart + longestRun).join(" ")
-      : undefined,
-    sourceEvidence: longestRun >= 5 && candidate.sourceText
-      ? candidateRunTokens.slice(commonRun.candidateStart, commonRun.candidateStart + longestRun).join(" ")
-      : undefined
+    submittedEvidence: longestRun >= 5 ? sourceRunTokens.slice(commonRun.sourceStart, commonRun.sourceStart + longestRun).join(" ") : undefined,
+    sourceEvidence: longestRun >= 5 && candidate.sourceText ? candidateRunTokens.slice(commonRun.candidateStart, commonRun.candidateStart + longestRun).join(" ") : undefined
   };
 }
