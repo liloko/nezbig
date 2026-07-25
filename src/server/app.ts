@@ -20,6 +20,7 @@ import { hydrateSearchCandidatesDetailed, searchWebCandidatesDetailed } from "./
 import type { FileEvidence, HumanizeRequest, LlmOpinionRequest, PlagiarismMatch, ScanReport, ScanRequest, ScanSettings, SearchDiagnostics } from "../shared/types.js";
 
 export const app = express();
+app.set("trust proxy", 1);
 
 const logger = pino({ level: process.env.LOG_LEVEL || "info" });
 
