@@ -12,7 +12,7 @@ export const BrandLogo: React.FC<BrandLogoProps> = ({ spinning = false, classNam
     <svg 
       width={width} 
       height={height} 
-      viewBox="0 0 415 426" 
+      viewBox="-106 0 522 522" 
       fill="none" 
       xmlns="http://www.w3.org/2000/svg"
       className={className}
