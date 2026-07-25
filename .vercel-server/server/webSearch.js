@@ -154,60 +154,34 @@ async function searchDuckDuckGo(query, maxResults) {
         }
     };
     try {
-        const url = new URL("https://duckduckgo.com/html/");
-        url.searchParams.set("q", query);
-        const response = await fetch(url, {
-            signal: withTimeout(SEARCH_TIMEOUT_MS),
-            headers: {
-                "user-agent": "Mozilla/5.0 Nezbig/1.0 (+local plagiarism checker)",
-                accept: "text/html,application/xhtml+xml"
-            }
-        });
-        if (!response.ok) {
-            const fallback = await runSearxngFallback();
-            if (fallback.length > 0) {
-                await searchCache.set(key, fallback);
-                return fallback;
-            }
-            throw new Error(`Пошук тимчасово недоступний: HTTP ${response.status}.`);
+        const { search, SafeSearchType } = await import("duck-duck-scrape");
+        const searchResults = await search(query, { safeSearch: SafeSearchType.OFF });
+        if (!searchResults.results || searchResults.results.length === 0) {
+            throw new Error("No results from duck-duck-scrape");
         }
-        const html = await response.text();
-        const $ = cheerio.load(html);
-        const candidates = [];
-        $(".result").each((_, element) => {
-            const titleElement = $(element).find(".result__title a").first();
-            const title = normalizeWhitespace(titleElement.text());
-            const href = titleElement.attr("href");
-            const snippet = normalizeWhitespace($(element).find(".result__snippet").text());
-            if (title && href && snippet) {
-                candidates.push({
-                    title,
-                    url: decodeDuckDuckGoUrl(href),
-                    snippet,
-                    query,
-                    provider: "DuckDuckGo"
-                });
-            }
-        });
-        if (candidates.length === 0) {
-            const fallback = await runSearxngFallback();
-            if (fallback.length > 0) {
-                await searchCache.set(key, fallback);
-                return fallback;
-            }
+        const candidates = searchResults.results
+            .slice(0, maxResults)
+            .map((r) => ({
+            title: normalizeWhitespace(r.title),
+            url: r.url,
+            snippet: normalizeWhitespace(r.description),
+            query,
+            provider: "DuckDuckGo"
+        }));
+        if (candidates.length > 0) {
+            await searchCache.set(key, candidates);
+            return candidates;
         }
-        const results = candidates.slice(0, maxResults);
-        await searchCache.set(key, results);
-        return results;
     }
     catch (error) {
-        const fallback = await runSearxngFallback();
-        if (fallback.length > 0) {
-            await searchCache.set(key, fallback);
-            return fallback;
-        }
-        throw error;
+        // Silently fall back
     }
+    // Fallback to SearXNG if primary scrape fails
+    const fallback = await runSearxngFallback();
+    if (fallback.length > 0) {
+        await searchCache.set(key, fallback);
+    }
+    return fallback;
 }
 async function searchGoogleCustom(query, maxResults) {
     const apiKey = process.env.GOOGLE_SEARCH_API_KEY?.trim();

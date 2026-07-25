@@ -18,6 +18,7 @@ import { calculateConfirmedPlagiarismScore, scoreCandidate, detectAiSignals, sum
 import { decodeUploadFileName, extractTextFromUpload } from "./textExtraction.js";
 import { hydrateSearchCandidatesDetailed, searchWebCandidatesDetailed } from "./webSearch.js";
 export const app = express();
+app.set("trust proxy", 1);
 const logger = pino({ level: process.env.LOG_LEVEL || "info" });
 app.use(cors({
     origin: process.env.CLIENT_URL ?? "http://localhost:5173",
