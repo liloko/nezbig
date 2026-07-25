@@ -1,5 +1,4 @@
 import { ClipboardEvent, FormEvent, useEffect, useMemo, useRef, useState } from "react";
-import nezbigLogo from "./assets/nezbig-mark.png";
 import { insertRichHtmlAtSelection } from "./richPaste";
 import { htmlFromPlainText, plainTextFromRichHtml, sanitizeRichHtml } from "./richText";
 import { copyRichTextForWord } from "./wordClipboard";
@@ -117,6 +116,7 @@ function reportSummaryText(report: ScanReport): string {
   return `${report.summary} AI-думка показана окремо: ${report.aiOpinionProbability}%.`;
 }
 
+import { BrandLogo } from "./components/BrandLogo";
 import { ProviderIcon } from "./components/ProviderIcon";
 import { SignalCard } from "./components/SignalCard";
 import { ProviderDiagnostics } from "./components/ProviderDiagnostics";
@@ -674,7 +674,7 @@ export default function App() {
       <main className="app-shell">
         <section className="intro" aria-labelledby="page-title">
           <div className="brand-lockup">
-            <img src={nezbigLogo} alt="" width="136" height="136" />
+            <BrandLogo spinning={busy || llmBusy} width={136} height={136} />
             <div>
               <p className="eyebrow">Text originality forensics</p>
               <h1 id="page-title">Незбіг</h1>
