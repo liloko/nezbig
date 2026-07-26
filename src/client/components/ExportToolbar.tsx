@@ -1,5 +1,5 @@
 import type { ScanReport } from "../../shared/types";
-import { downloadReportPdf, downloadReportPng } from "../utils/reportExport";
+import { downloadReportPng } from "../utils/reportExport";
 
 interface ExportToolbarProps {
   report: ScanReport;
@@ -16,7 +16,7 @@ export function ExportToolbar({ report }: ExportToolbarProps) {
 
   return (
     <div style={{ display: "flex", gap: "8px" }}>
-      <button className="secondary-button" type="button" onClick={() => downloadReportPdf(report)} style={{ display: "flex", alignItems: "center", gap: "6px" }}>
+      <button className="secondary-button" type="button" onClick={() => window.print()} style={{ display: "flex", alignItems: "center", gap: "6px" }}>
         {downloadIcon}
         PDF
       </button>

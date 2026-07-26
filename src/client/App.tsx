@@ -75,7 +75,11 @@ export default function App() {
         setMessage("Базовий звіт готовий. AI-думка зараз недоступна, використано локальний аналіз.");
       });
     } catch (error) {
-      setMessage(error instanceof Error ? error.message : "Перевірка не вдалася.");
+      if (error instanceof Error && error.name === "AbortError") {
+        setMessage("Перевірку скасовано користувачем.");
+      } else {
+        setMessage(error instanceof Error ? error.message : "Перевірка не вдалася.");
+      }
     }
   }
 
@@ -171,7 +175,7 @@ export default function App() {
           />
         ) : null}
 
-        {error && !message ? <div className="error-banner" style={{ color: "red", textAlign: "center", padding: "10px" }}>{error}</div> : null}
+
 
         {busy || llmBusy ? (
           <LoadingPanel

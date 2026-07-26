@@ -1,4 +1,4 @@
-import { jsPDF } from "jspdf";
+
 import type { ScanReport } from "../../shared/types";
 import { riskLabel, aiVerdictLabel, reportSummaryText, formatNumber } from "./reportLabels";
 
@@ -194,20 +194,3 @@ export function downloadReportPng(report: ScanReport): void {
   }, "image/png");
 }
 
-export function downloadReportPdf(report: ScanReport): void {
-  const canvas = generateReportCanvas(report);
-  const imgData = canvas.toDataURL("image/png");
-  
-  // A4 size: 210mm x 297mm. Calculate scaled height for A4 width
-  const pdf = new jsPDF({
-    orientation: "portrait",
-    unit: "mm",
-    format: "a4"
-  });
-  
-  const pdfWidth = pdf.internal.pageSize.getWidth();
-  const pdfHeight = (canvas.height * pdfWidth) / canvas.width;
-  
-  pdf.addImage(imgData, "PNG", 0, 0, pdfWidth, pdfHeight);
-  pdf.save(`nezbig-report-${new Date(report.checkedAt).toISOString().slice(0, 10)}.pdf`);
-}

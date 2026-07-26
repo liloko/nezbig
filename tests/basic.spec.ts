@@ -83,3 +83,42 @@ test('full scan flow with mock API', async ({ page }) => {
   const plagiarismScore = page.locator('.metrics article:first-child strong');
   await expect(plagiarismScore).toHaveText('45%');
 });
+
+test('cancel scan flow', async ({ page }) => {
+  // Mock the scan endpoints
+  await page.route('/api/scan/jobs', async route => {
+    const json = { jobId: 'mocked-job-id' };
+    await route.fulfill({ json });
+  });
+
+  // Keep it pending
+  await page.route('/api/scan-status/mocked-job-id', async route => {
+    const json = { status: 'processing', progress: { chunksChecked: 0, totalChunks: 10 } };
+    await route.fulfill({ json });
+  });
+
+  await page.goto('/');
+
+  // Type text
+  const longText = 'Цей текст достатньо довгий, щоб запустити перевірку. '.repeat(15);
+  await page.locator('[contenteditable]').fill(longText);
+
+  // Click submit
+  const submitButton = page.locator('button[type="submit"]');
+  await submitButton.click();
+
+  // Loading panel should appear
+  const loadingPanel = page.locator('.loading-panel');
+  await expect(loadingPanel).toBeVisible({ timeout: 5000 });
+
+  // Click cancel
+  const cancelButton = page.locator('button:has-text("Скасувати")');
+  await cancelButton.click();
+
+  // Message should update with cancel text
+  const messageEl = page.locator('.message');
+  await expect(messageEl).toHaveText('Перевірку скасовано користувачем.', { timeout: 5000 });
+
+  // Submit button should be enabled again
+  await expect(submitButton).toBeEnabled();
+});

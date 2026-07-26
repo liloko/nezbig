@@ -293,6 +293,14 @@ app.get("/api/scan-status/:jobId", async (request, response) => {
       response.status(404).json({ error: "Завдання не знайдено" });
       return;
     }
+    
+    // Stale job detection (10 minutes)
+    const createdAt = new Date(job.createdAt).getTime();
+    if (job.status === "processing" && Date.now() - createdAt > 1000 * 60 * 10) {
+      response.json({ ...job, status: "error", error: "Перевірка перервалась через таймаут сервера." });
+      return;
+    }
+    
     response.json(job);
   } catch (error) {
     response.status(500).json({ error: "Помилка сервера" });
