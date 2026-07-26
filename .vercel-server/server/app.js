@@ -197,6 +197,16 @@ app.post("/api/extract", upload.single("file"), async (request, response) => {
         response.status(400).json({ error: error instanceof Error ? error.message : "Не вдалося прочитати файл." });
     }
 });
+app.post("/api/feedback", async (request, response) => {
+    try {
+        const { text, page } = request.body;
+        logger.info({ feedback: text, page }, "User feedback");
+        response.json({ ok: true });
+    }
+    catch (error) {
+        response.status(500).json({ error: "Failed to send feedback" });
+    }
+});
 app.post("/api/scan", scanLimiter, async (request, response) => {
     try {
         const parsed = ScanRequestSchema.parse(request.body);

@@ -9,6 +9,7 @@ import { useDocumentEditor } from "./hooks/useDocumentEditor";
 import { useWordExport } from "./hooks/useWordExport";
 import { useDragDrop } from "./hooks/useDragDrop";
 import { useDraft } from "./hooks/useDraft";
+import { useToast } from "./hooks/useToast";
 
 // Utils
 import { defaultSettings, recommendSettings, estimateScanSeconds, formatDuration } from "./utils/scanSettings";
@@ -29,6 +30,10 @@ export default function App() {
   const [appMode, setAppMode] = useState<"scan" | "diff">("scan");
   const [settings, setSettings] = useState<ScanSettings>(defaultSettings);
   const [message, setMessage] = useState("");
+  const { toasts, show: showToast } = useToast();
+  const [feedbackOpen, setFeedbackOpen] = useState(false);
+  const [feedbackText, setFeedbackText] = useState("");
+  const [feedbackBusy, setFeedbackBusy] = useState(false);
   const reportRef = useRef<HTMLElement | null>(null);
   const mainRef = useRef<HTMLElement>(null);
 
@@ -143,7 +148,7 @@ export default function App() {
     editor.setSelectedFile(null);
     editor.setFileName("Відредагований текст");
     setReport(null);
-    setMessage("Відредагований текст перенесено в поле. Перевірте факти й запустіть повторний аналіз.");
+    showToast("Відредагований текст перенесено в поле. Перевірте факти й запустіть повторний аналіз.", "success");
     window.requestAnimationFrame(() => {
       document.getElementById("checker")?.scrollIntoView({ behavior: "smooth", block: "start" });
     });
@@ -155,14 +160,34 @@ export default function App() {
       if (!res.ok) throw new Error("Звіт не знайдено");
       const reportData = await res.json();
       setReport(reportData);
-      setMessage("Завантажено звіт із історії.");
+      showToast("Завантажено звіт із історії.", "success");
       window.requestAnimationFrame(() => {
         reportRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
       });
     } catch (err) {
-      setMessage(err instanceof Error ? err.message : "Помилка завантаження історії.");
+      showToast(err instanceof Error ? err.message : "Помилка завантаження історії.", "error");
     }
-  }, [setReport]);
+  }, [setReport, showToast]);
+
+  const handleSendFeedback = async () => {
+    if (!feedbackText.trim()) return;
+    setFeedbackBusy(true);
+    try {
+      const res = await fetch("/api/feedback", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ text: feedbackText, page: window.location.href })
+      });
+      if (!res.ok) throw new Error();
+      showToast("Дякуємо за ваш відгук!", "success");
+      setFeedbackOpen(false);
+      setFeedbackText("");
+    } catch {
+      showToast("Не вдалося надіслати відгук.", "error");
+    } finally {
+      setFeedbackBusy(false);
+    }
+  };
 
   // Handle /history/:id deep links on mount
   useEffect(() => {
@@ -200,10 +225,12 @@ export default function App() {
 
         <HistoryPanel onSelect={handleLoadHistory} />
 
-        <div className="app-tabs" role="tablist">
+        <div className="app-tabs" role="tablist" aria-label="Режим роботи">
           <button 
             role="tab" 
             aria-selected={appMode === "scan"} 
+            aria-controls="scan-panel"
+            id="tab-scan"
             className={`app-tab ${appMode === "scan" ? "active" : ""}`}
             onClick={() => setAppMode("scan")}
           >
@@ -212,6 +239,8 @@ export default function App() {
           <button 
             role="tab" 
             aria-selected={appMode === "diff"} 
+            aria-controls="diff-panel"
+            id="tab-diff"
             className={`app-tab ${appMode === "diff" ? "active" : ""}`}
             onClick={() => setAppMode("diff")}
           >
@@ -219,9 +248,10 @@ export default function App() {
           </button>
         </div>
 
-        {appMode === "scan" ? (
-          <>
-            <form id="checker" className="workspace" onSubmit={handleSubmit}>
+        <div role="tabpanel" id="scan-panel" aria-labelledby="tab-scan" hidden={appMode !== "scan"}>
+          {appMode === "scan" && (
+            <>
+              <form id="checker" className="workspace" onSubmit={handleSubmit}>
           <TextEditor
             editorRef={editor.editorRef}
             selectedFile={editor.selectedFile}
@@ -289,13 +319,18 @@ export default function App() {
             <ReportView report={report} llmBusy={llmBusy} reportRef={reportRef} />
           ) : null}
           </>
-        ) : (
-          <DiffPanel />
-        )}
+          )}
+        </div>
+
+        <div role="tabpanel" id="diff-panel" aria-labelledby="tab-diff" hidden={appMode !== "diff"}>
+          {appMode === "diff" && <DiffPanel />}
+        </div>
 
         <footer className="app-footer">
           <p>Незбіг — безкоштовна перевірка тексту на плагіат та AI-сліди</p>
           <div className="footer-links">
+            <button type="button" className="text-button" onClick={() => setFeedbackOpen(true)}>Повідомити про помилку</button>
+            <span>·</span>
             <a href="https://github.com/vadapadix/nezbig" target="_blank" rel="noopener noreferrer">GitHub</a>
             <span>·</span>
             <a href="/privacy.html">Privacy</a>
@@ -304,6 +339,36 @@ export default function App() {
           </div>
         </footer>
       </main>
+
+      {feedbackOpen && (
+        <div className="modal-overlay" onClick={() => setFeedbackOpen(false)}>
+          <div className="modal-content" onClick={e => e.stopPropagation()}>
+            <h3>Зворотний зв'язок</h3>
+            <p>Знайшли помилку чи маєте пропозицію? Напишіть нам!</p>
+            <textarea 
+              className="feedback-textarea" 
+              value={feedbackText} 
+              onChange={e => setFeedbackText(e.target.value)} 
+              placeholder="Опишіть проблему..."
+              rows={4}
+            />
+            <div className="modal-actions">
+              <button type="button" className="secondary-button" onClick={() => setFeedbackOpen(false)}>Скасувати</button>
+              <button type="button" className="primary-button" onClick={handleSendFeedback} disabled={feedbackBusy || !feedbackText.trim()}>
+                {feedbackBusy ? "Надсилання..." : "Надіслати"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      <div className="toast-container" aria-live="polite">
+        {toasts.map((t) => (
+          <div key={t.id} className={`toast toast-${t.type}`}>
+            {t.text}
+          </div>
+        ))}
+      </div>
     </>
   );
 }

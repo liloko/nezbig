@@ -4,7 +4,7 @@ export function useFaviconProgress(progress: { checked: number; total: number } 
   useEffect(() => {
     if (!progress) {
       const link = document.querySelector("link[rel*='icon']") as HTMLLinkElement;
-      if (link) link.href = "/favicon.ico"; // Reset to default
+      if (link) link.href = "/favicon.svg"; // Reset to default
       return;
     }
     

@@ -2020,15 +2020,19 @@ progress::-moz-progress-bar {
 }
 
 .diff-inputs {
-  display: grid;
-  grid-template-columns: 1fr;
+  display: flex;
+  flex-direction: column;
   gap: 1.5rem;
   margin-bottom: 1.5rem;
 }
 
 @media (min-width: 768px) {
   .diff-inputs {
-    grid-template-columns: 1fr 1fr;
+    flex-direction: row;
+  }
+  .diff-input-group {
+    flex: 1;
+    min-width: 0;
   }
 }
 
@@ -2103,4 +2107,111 @@ progress::-moz-progress-bar {
   padding: 0 2px;
   border-radius: 2px;
   color: #b52a3f;
+}
+
+/* ================= Toasts ================= */
+.toast-container {
+  position: fixed;
+  bottom: 1.5rem;
+  right: 1.5rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  z-index: 9999;
+  pointer-events: none;
+}
+
+.toast {
+  padding: 0.875rem 1.25rem;
+  border-radius: 10px;
+  background: var(--surface);
+  border: 1px solid var(--line);
+  box-shadow: var(--shadow-lift);
+  animation: slideInRight 0.3s var(--ease-out);
+  color: var(--text);
+  font-size: 0.9rem;
+  pointer-events: auto;
+}
+
+.toast-error { 
+  border-left: 3px solid var(--risk); 
+}
+
+.toast-success { 
+  border-left: 3px solid var(--accent); 
+}
+
+@keyframes slideInRight {
+  from {
+    opacity: 0;
+    transform: translateX(50px);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}
+
+/* ================= Modal ================= */
+.modal-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.5);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 10000;
+  animation: fadeIn 0.2s var(--ease-out);
+}
+
+.modal-content {
+  background: var(--surface);
+  border-radius: 12px;
+  padding: 2rem;
+  width: 90%;
+  max-width: 500px;
+  box-shadow: var(--shadow-lift);
+  animation: slideUp 0.3s var(--ease-out);
+}
+
+.feedback-textarea {
+  width: 100%;
+  padding: 0.75rem;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--bg);
+  color: var(--text);
+  font-family: inherit;
+  resize: vertical;
+  margin: 1rem 0;
+}
+
+.modal-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 1rem;
+}
+
+.text-button {
+  background: none;
+  border: none;
+  color: var(--muted);
+  cursor: pointer;
+  padding: 0;
+  font-family: inherit;
+  font-size: inherit;
+}
+
+.text-button:hover {
+  color: var(--accent);
+}
+
+@keyframes fadeIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+@keyframes slideUp {
+  from { opacity: 0; transform: translateY(20px); }
+  to { opacity: 1; transform: translateY(0); }
 }
