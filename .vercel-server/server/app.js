@@ -46,6 +46,7 @@ app.use(cors({
 app.use(express.json({ limit: "10mb" }));
 const scanLimiter = rateLimit({ windowMs: 60 * 1000, max: 10, message: { error: "Забагато запитів" } });
 const fileLimiter = rateLimit({ windowMs: 60 * 1000, max: 5, message: { error: "Забагато запитів з файлами" } });
+const feedbackLimiter = rateLimit({ windowMs: 60 * 1000, max: 3, message: { error: "Забагато повідомлень" } });
 const upload = multer({
     storage: multer.memoryStorage(),
     limits: { fileSize: 50 * 1024 * 1024 }
@@ -214,7 +215,7 @@ app.post("/api/extract", upload.single("file"), async (request, response) => {
         response.status(400).json({ error: error instanceof Error ? error.message : "Не вдалося прочитати файл." });
     }
 });
-app.post("/api/feedback", async (request, response) => {
+app.post("/api/feedback", feedbackLimiter, async (request, response) => {
     try {
         const { text, page } = request.body;
         logger.info({ feedback: text, page }, "User feedback");

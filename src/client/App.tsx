@@ -1,4 +1,4 @@
-import { FormEvent, useEffect, useMemo, useRef, useState, useCallback } from "react";
+import { FormEvent, useEffect, useMemo, useRef, useState, useCallback, lazy, Suspense } from "react";
 import type { ScanSettings } from "../shared/types";
 
 // Hooks
@@ -21,10 +21,11 @@ import { TextEditor } from "./components/TextEditor";
 import { ScanSettingsPanel } from "./components/ScanSettingsPanel";
 import { LoadingPanel } from "./components/LoadingPanel";
 import { HumanizePanel } from "./components/HumanizePanel";
-import { ReportView } from "./components/ReportView";
 import { HistoryPanel } from "./components/HistoryPanel";
-import { DiffPanel } from "./components/DiffPanel";
 import { useFaviconProgress } from "./hooks/useFaviconProgress";
+
+const DiffPanel = lazy(() => import("./components/DiffPanel").then(m => ({ default: m.DiffPanel })));
+const ReportView = lazy(() => import("./components/ReportView").then(m => ({ default: m.ReportView })));
 
 export default function App() {
   const [appMode, setAppMode] = useState<"scan" | "diff">("scan");
@@ -316,14 +317,20 @@ export default function App() {
         ) : null}
 
           {report ? (
-            <ReportView report={report} llmBusy={llmBusy} reportRef={reportRef} />
+            <Suspense fallback={<div className="loading-skeleton">Завантаження звіту…</div>}>
+              <ReportView report={report} llmBusy={llmBusy} reportRef={reportRef} />
+            </Suspense>
           ) : null}
           </>
           )}
         </div>
 
         <div role="tabpanel" id="diff-panel" aria-labelledby="tab-diff" hidden={appMode !== "diff"}>
-          {appMode === "diff" && <DiffPanel />}
+          {appMode === "diff" && (
+            <Suspense fallback={<div className="loading-skeleton">Завантаження порівняння…</div>}>
+              <DiffPanel />
+            </Suspense>
+          )}
         </div>
 
         <footer className="app-footer">

@@ -2219,3 +2219,15 @@ progress::-moz-progress-bar {
   from { opacity: 0; transform: translateY(20px); }
   to { opacity: 1; transform: translateY(0); }
 }
+
+@keyframes pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.5; }
+}
+
+.loading-skeleton {
+  padding: 2rem;
+  text-align: center;
+  color: var(--muted);
+  animation: pulse 1.5s ease-in-out infinite;
+}
