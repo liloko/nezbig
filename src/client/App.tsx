@@ -21,6 +21,7 @@ import { ScanSettingsPanel } from "./components/ScanSettingsPanel";
 import { LoadingPanel } from "./components/LoadingPanel";
 import { HumanizePanel } from "./components/HumanizePanel";
 import { ReportView } from "./components/ReportView";
+import { HistoryPanel } from "./components/HistoryPanel";
 
 export default function App() {
   const [settings, setSettings] = useState<ScanSettings>(defaultSettings);
@@ -126,6 +127,21 @@ export default function App() {
     });
   }
 
+  const handleLoadHistory = useCallback(async (id: string) => {
+    try {
+      const res = await fetch(`/api/history/${id}`);
+      if (!res.ok) throw new Error("Звіт не знайдено");
+      const reportData = await res.json();
+      setReport(reportData);
+      setMessage("Завантажено звіт із історії.");
+      window.requestAnimationFrame(() => {
+        reportRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+      });
+    } catch (err) {
+      setMessage(err instanceof Error ? err.message : "Помилка завантаження історії.");
+    }
+  }, [setReport]);
+
   return (
     <>
       <a className="skip-link" href="#checker">
@@ -149,6 +165,8 @@ export default function App() {
             </div>
           </div>
         </section>
+
+        <HistoryPanel onSelect={handleLoadHistory} />
 
         <form id="checker" className="workspace" onSubmit={handleSubmit}>
           <TextEditor
