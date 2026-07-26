@@ -27,7 +27,7 @@ export default function App() {
 
   // Hooks
   const editor = useDocumentEditor(setMessage);
-  const { report, setReport, busy, scan } = useScan();
+  const { report, setReport, busy, progress, error, scan, cancel } = useScan();
   const { llmBusy, loadLlmOpinion } = useAiOpinion(setReport);
   const { humanized, setHumanized, humanizerBusy, handleHumanize } = useHumanize();
   const wordExport = useWordExport(setMessage);
@@ -171,11 +171,15 @@ export default function App() {
           />
         ) : null}
 
+        {error && !message ? <div className="error-banner" style={{ color: "red", textAlign: "center", padding: "10px" }}>{error}</div> : null}
+
         {busy || llmBusy ? (
           <LoadingPanel
             busy={busy}
             llmBusy={llmBusy}
+            progress={progress}
             estimatedSeconds={formatDuration(estimatedSeconds)}
+            onCancel={cancel}
           />
         ) : null}
 

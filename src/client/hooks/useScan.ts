@@ -1,4 +1,4 @@
-import { useState, useCallback } from "react";
+import { useState, useCallback, useRef } from "react";
 import type { ScanReport, ScanSettings } from "../../shared/types";
 
 export function useScan() {
@@ -6,6 +6,16 @@ export function useScan() {
   const [busy, setBusy] = useState(false);
   const [progress, setProgress] = useState<{ checked: number; total: number } | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const abortControllerRef = useRef<AbortController | null>(null);
+
+  const cancel = useCallback(() => {
+    if (abortControllerRef.current) {
+      abortControllerRef.current.abort();
+      abortControllerRef.current = null;
+    }
+    setBusy(false);
+    setError("Перевірку скасовано користувачем.");
+  }, []);
 
   const scan = useCallback(async (
     text: string,
@@ -18,18 +28,22 @@ export function useScan() {
     setReport(null);
     setProgress(null);
 
+    abortControllerRef.current = new AbortController();
+    const signal = abortControllerRef.current.signal;
+
     try {
       let response: Response;
       if (selectedFile) {
         const formData = new FormData();
         formData.append("file", selectedFile);
         formData.append("settings", JSON.stringify(settings));
-        response = await fetch("/api/scan-file/jobs", { method: "POST", body: formData });
+        response = await fetch("/api/scan-file/jobs", { method: "POST", body: formData, signal });
       } else {
         response = await fetch("/api/scan/jobs", {
           method: "POST",
           headers: { "content-type": "application/json" },
-          body: JSON.stringify({ text, fileName, settings })
+          body: JSON.stringify({ text, fileName, settings }),
+          signal
         });
       }
 
@@ -49,7 +63,8 @@ export function useScan() {
       return await new Promise<ScanReport>((resolve, reject) => {
         const poll = async () => {
           try {
-            const statusRes = await fetch(`/api/scan-status/${jobId}`);
+            if (signal.aborted) throw new Error("Перевірку скасовано користувачем.");
+            const statusRes = await fetch(`/api/scan-status/${jobId}`, { signal });
             const statusPayload = await statusRes.json();
             
             if (!statusRes.ok || statusPayload.error) {
@@ -85,5 +100,5 @@ export function useScan() {
     }
   }, []);
 
-  return { report, setReport, busy, progress, error, scan };
+  return { report, setReport, busy, progress, error, scan, cancel };
 }

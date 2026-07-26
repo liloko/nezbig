@@ -34,7 +34,12 @@ export function ReportView({ report, llmBusy, reportRef }: ReportViewProps) {
         </div>
         <div className="report-actions">
           <time dateTime={report.checkedAt}>{new Intl.DateTimeFormat("uk-UA", { dateStyle: "medium", timeStyle: "short" }).format(new Date(report.checkedAt))}</time>
-          <ExportToolbar report={report} />
+          <div style={{ display: "flex", gap: "8px", alignItems: "center" }}>
+            <button className="secondary-button" type="button" onClick={() => navigator.clipboard.writeText(window.location.origin + "/history/" + report.id)}>
+              Копіювати посилання
+            </button>
+            <ExportToolbar report={report} />
+          </div>
         </div>
       </div>
 
