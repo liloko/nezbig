@@ -1,4 +1,5 @@
 import * as cheerio from "cheerio";
+import { franc } from "franc-min";
 import { excerptForSearch, normalizeWhitespace } from "./chunking.js";
 import { ProviderCircuitBreaker } from "./providerCircuitBreaker.js";
 import { ProviderTaskScheduler } from "./providerTaskScheduler.js";
@@ -126,7 +127,7 @@ async function searchDuckDuckGo(query, maxResults) {
     const cached = await searchCache.get(key);
     if (cached)
         return cached;
-    const runSearxngFallback = async () => {
+    const runSearxng = async () => {
         const searxngUrl = process.env.SEARXNG_URL;
         if (!searxngUrl)
             return [];
@@ -146,13 +147,21 @@ async function searchDuckDuckGo(query, maxResults) {
                 url: r.url,
                 snippet: normalizeWhitespace(r.content),
                 query,
-                provider: "DuckDuckGo (SearXNG Fallback)"
+                provider: process.env.SEARXNG_URL ? "SearXNG" : "DuckDuckGo (SearXNG Fallback)"
             }));
         }
         catch {
             return [];
         }
     };
+    const hasSearxng = !!process.env.SEARXNG_URL;
+    if (hasSearxng) {
+        const searxResults = await runSearxng();
+        if (searxResults.length > 0) {
+            await searchCache.set(key, searxResults);
+            return searxResults;
+        }
+    }
     try {
         const { search, SafeSearchType } = await import("duck-duck-scrape");
         const searchResults = await search(query, { safeSearch: SafeSearchType.OFF });
@@ -176,12 +185,14 @@ async function searchDuckDuckGo(query, maxResults) {
     catch (error) {
         // Silently fall back
     }
-    // Fallback to SearXNG if primary scrape fails
-    const fallback = await runSearxngFallback();
-    if (fallback.length > 0) {
-        await searchCache.set(key, fallback);
+    if (!hasSearxng) {
+        const fallback = await runSearxng();
+        if (fallback.length > 0) {
+            await searchCache.set(key, fallback);
+        }
+        return fallback;
     }
-    return fallback;
+    return [];
 }
 async function searchGoogleCustom(query, maxResults) {
     const apiKey = process.env.GOOGLE_SEARCH_API_KEY?.trim();
@@ -229,7 +240,9 @@ async function searchWikipedia(query, maxResults) {
     const plainQuery = query.replaceAll('"', "").trim();
     if (plainQuery.length < 10)
         return [];
-    const url = new URL("https://uk.wikipedia.org/w/api.php");
+    const lang = franc(plainQuery);
+    const prefix = lang === 'eng' ? 'en' : (lang === 'rus' ? 'ru' : 'uk');
+    const url = new URL(`https://${prefix}.wikipedia.org/w/api.php`);
     url.searchParams.set("action", "query");
     url.searchParams.set("list", "search");
     url.searchParams.set("srsearch", plainQuery);
@@ -254,7 +267,7 @@ async function searchWikipedia(query, maxResults) {
             const cleanSnippet = item.snippet.replace(/<[^>]+>/g, "");
             return {
                 title: item.title + " - Wikipedia",
-                url: `https://uk.wikipedia.org/wiki/?curid=${item.pageid}`,
+                url: `https://${prefix}.wikipedia.org/wiki/?curid=${item.pageid}`,
                 snippet: normalizeWhitespace(cleanSnippet),
                 query,
                 provider: "Wikipedia"

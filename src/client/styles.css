@@ -1983,6 +1983,7 @@ progress::-moz-progress-bar {
   display: flex;
   justify-content: center;
   gap: 0.75rem;
+  margin-top: 2rem;
   margin-bottom: 2rem;
   border-bottom: none;
   padding-bottom: 0;

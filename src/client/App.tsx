@@ -164,6 +164,16 @@ export default function App() {
     }
   }, [setReport]);
 
+  // Handle /history/:id deep links on mount
+  useEffect(() => {
+    const match = window.location.pathname.match(/^\/history\/([\w-]+)$/);
+    if (match) {
+      const id = match[1];
+      void handleLoadHistory(id);
+      window.history.replaceState({}, "", "/");
+    }
+  }, [handleLoadHistory]);
+
   return (
     <>
       <a className="skip-link" href="#checker">

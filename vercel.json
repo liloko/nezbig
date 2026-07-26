@@ -9,6 +9,10 @@
     {
       "source": "/api/(.*)",
       "destination": "/api/[...path]"
+    },
+    {
+      "source": "/history/(.*)",
+      "destination": "/index.html"
     }
   ]
 }

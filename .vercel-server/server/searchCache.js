@@ -13,14 +13,14 @@ export class MemoryTtlCache {
     has(key) {
         return this.getLiveEntry(key) !== undefined;
     }
-    set(key, value) {
+    set(key, value, customTtlMs) {
         if (this.entries.size >= this.maxEntries) {
             const firstKey = this.entries.keys().next().value;
             if (firstKey)
                 this.entries.delete(firstKey);
         }
         this.entries.set(key, {
-            expiresAt: Date.now() + this.ttlMs,
+            expiresAt: Date.now() + (customTtlMs ?? this.ttlMs),
             value
         });
     }
@@ -67,11 +67,14 @@ export class DistributedCache {
         }
         return undefined; // Not found
     }
-    async set(key, value) {
-        this.memoryCache.set(key, value);
+    async set(key, value, customTtlMs) {
+        const ttl = customTtlMs ?? this.ttlMs;
+        // We can update MemoryTtlCache to accept ttl or just create a new entry with explicit expiration.
+        // For now, memoryCache.set uses this.ttlMs internally. Let's modify MemoryTtlCache to accept customTtlMs.
+        this.memoryCache.set(key, value, customTtlMs);
         if (this.isKvEnabled) {
             try {
-                await kv.set(`${this.prefix}:${key}`, { value }, { px: this.ttlMs });
+                await kv.set(`${this.prefix}:${key}`, { value }, { px: ttl });
             }
             catch (error) {
                 console.warn(`[KV Cache] Error setting key ${key}:`, error);

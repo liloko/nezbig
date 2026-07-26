@@ -1,12 +1,14 @@
 import "dotenv/config";
+import crypto from "crypto";
 import cors from "cors";
 import express from "express";
 import multer from "multer";
 import pino from "pino";
+import * as diff from "diff";
 import { rateLimit } from "express-rate-limit";
 import { ScanRequestSchema, ScanSettingsSchema, LlmOpinionRequestSchema, HumanizeRequestSchema } from "../shared/validation.js";
-import { saveReport, getReport } from "./db.js";
-import { scanJobCache } from "./jobStore.js";
+import { saveReport, getReport, redis } from "./db.js";
+import { scanJobCache, reportCache } from "./jobStore.js";
 import { chunkText, countWords } from "./chunking.js";
 import { prepareDocumentText } from "./documentPreprocess.js";
 import { mergeRevisedTextIntoHtml } from "./formattedDocument.js";
@@ -91,7 +93,7 @@ function uniqueMatches(matches) {
     }
     return [...bestByUrl.values()];
 }
-async function runScan(request, fileEvidence) {
+async function runScan(request, fileEvidence, onProgress) {
     const prepared = prepareDocumentText(request.text);
     const text = prepared.text;
     if (text.length < 120) {
@@ -122,6 +124,11 @@ async function runScan(request, fileEvidence) {
             const diagnostics = emptySearchDiagnostics();
             diagnostics.providers.push({ provider: "Пошуковий pipeline", attempted: 1, succeeded: 0, failed: 1, timedOut: 0, results: 0 });
             return { matches: [], diagnostics };
+        }
+        finally {
+            if (onProgress) {
+                onProgress(chunk.index + 1, chunks.length);
+            }
         }
     });
     const preliminaryMatches = matchedByChunk.flatMap((result) => result.matches);
@@ -202,19 +209,35 @@ app.post("/api/scan", scanLimiter, async (request, response) => {
 app.post("/api/scan/jobs", scanLimiter, async (request, response) => {
     try {
         const parsed = ScanRequestSchema.parse(request.body);
+        const settings = sanitizeSettings(parsed.settings);
+        const textHash = crypto.createHash("sha256").update(parsed.text).digest("hex");
+        const reportKey = `${textHash}:${settings.sensitivity}`;
+        const cached = await reportCache.get(reportKey);
+        if (cached) {
+            response.json({ jobId: cached.id, status: "completed", result: cached });
+            return;
+        }
         const jobId = crypto.randomUUID();
+        if (process.env.VERCEL === "1") {
+            const report = await runScan(parsed);
+            await saveReport(report.id, report);
+            response.json({ jobId: jobId, status: "completed", result: report });
+            return;
+        }
         await scanJobCache.set(jobId, { id: jobId, status: "pending", createdAt: new Date().toISOString() });
         Promise.resolve().then(async () => {
             try {
                 await scanJobCache.set(jobId, { id: jobId, status: "processing", createdAt: new Date().toISOString() });
-                const report = await runScan(parsed);
-                // Store report with jobId as history ID to avoid regenerating random UUIDs if possible, or use report.id
+                const report = await runScan(parsed, undefined, (checked, total) => {
+                    scanJobCache.set(jobId, { id: jobId, status: "processing", progress: { chunksChecked: checked, totalChunks: total }, createdAt: new Date().toISOString() }).catch(() => { });
+                });
                 await saveReport(report.id, report);
-                await scanJobCache.set(jobId, { id: jobId, status: "completed", result: report, createdAt: new Date().toISOString() });
+                await reportCache.set(reportKey, report);
+                await scanJobCache.set(jobId, { id: jobId, status: "completed", result: report, createdAt: new Date().toISOString() }, 1000 * 60 * 30);
             }
             catch (error) {
                 logger.error(error);
-                await scanJobCache.set(jobId, { id: jobId, status: "error", error: error instanceof Error ? error.message : "Помилка при перевірці", createdAt: new Date().toISOString() });
+                await scanJobCache.set(jobId, { id: jobId, status: "error", error: error instanceof Error ? error.message : "Помилка при перевірці", createdAt: new Date().toISOString() }, 1000 * 60 * 10);
             }
         });
         response.json({ jobId });
@@ -230,10 +253,44 @@ app.get("/api/scan-status/:jobId", async (request, response) => {
             response.status(404).json({ error: "Завдання не знайдено" });
             return;
         }
+        // Stale job detection (10 minutes)
+        const createdAt = new Date(job.createdAt).getTime();
+        if (job.status === "processing" && Date.now() - createdAt > 1000 * 60 * 10) {
+            response.json({ ...job, status: "error", error: "Перевірка перервалась через таймаут сервера." });
+            return;
+        }
         response.json(job);
     }
     catch (error) {
         response.status(500).json({ error: "Помилка сервера" });
+    }
+});
+app.get("/api/history", async (_req, res) => {
+    if (!redis) {
+        res.json([]);
+        return;
+    }
+    try {
+        const ids = await redis.zrevrange("history:index", 0, 9);
+        const pipeline = redis.pipeline();
+        for (const id of ids)
+            pipeline.get(`history:${id}`);
+        const results = await pipeline.exec();
+        const items = (results || []).map(([err, data]) => {
+            if (err || !data)
+                return null;
+            try {
+                const r = JSON.parse(data);
+                return { id: r.id, fileName: r.fileName, checkedAt: r.checkedAt, plagiarismScore: r.plagiarismScore };
+            }
+            catch {
+                return null;
+            }
+        }).filter(Boolean);
+        res.json(items);
+    }
+    catch (error) {
+        res.status(500).json({ error: "Помилка при завантаженні історії" });
     }
 });
 app.get("/api/history/:id", async (request, response) => {
@@ -273,19 +330,35 @@ app.post("/api/scan-file/jobs", fileLimiter, upload.single("file"), async (reque
         const extracted = await extractTextFromUpload(request.file);
         const rawSettings = typeof request.body.settings === "string" ? JSON.parse(request.body.settings) : request.body.settings;
         const settings = ScanSettingsSchema.parse(rawSettings);
-        const parsed = { text: extracted.text, fileName: extracted.fileName, settings: settings };
+        const parsed = { text: extracted.text, fileName: extracted.fileName, settings };
+        const textHash = crypto.createHash("sha256").update(parsed.text).digest("hex");
+        const reportKey = `${textHash}:${settings.sensitivity}`;
+        const cached = await reportCache.get(reportKey);
+        if (cached) {
+            response.json({ jobId: cached.id, status: "completed", result: cached });
+            return;
+        }
         const jobId = crypto.randomUUID();
+        if (process.env.VERCEL === "1") {
+            const report = await runScan(parsed, extracted.fileEvidence);
+            await saveReport(report.id, report);
+            response.json({ jobId: jobId, status: "completed", result: report });
+            return;
+        }
         await scanJobCache.set(jobId, { id: jobId, status: "pending", createdAt: new Date().toISOString() });
         Promise.resolve().then(async () => {
             try {
                 await scanJobCache.set(jobId, { id: jobId, status: "processing", createdAt: new Date().toISOString() });
-                const report = await runScan(parsed, extracted.fileEvidence);
+                const report = await runScan(parsed, extracted.fileEvidence, (checked, total) => {
+                    scanJobCache.set(jobId, { id: jobId, status: "processing", progress: { chunksChecked: checked, totalChunks: total }, createdAt: new Date().toISOString() }).catch(() => { });
+                });
                 await saveReport(report.id, report);
-                await scanJobCache.set(jobId, { id: jobId, status: "completed", result: report, createdAt: new Date().toISOString() });
+                await reportCache.set(reportKey, report);
+                await scanJobCache.set(jobId, { id: jobId, status: "completed", result: report, createdAt: new Date().toISOString() }, 1000 * 60 * 30);
             }
             catch (error) {
                 logger.error(error);
-                await scanJobCache.set(jobId, { id: jobId, status: "error", error: error instanceof Error ? error.message : "Помилка при перевірці", createdAt: new Date().toISOString() });
+                await scanJobCache.set(jobId, { id: jobId, status: "error", error: error instanceof Error ? error.message : "Помилка при перевірці", createdAt: new Date().toISOString() }, 1000 * 60 * 10);
             }
         });
         response.json({ jobId });
@@ -316,7 +389,7 @@ app.post("/api/ai-opinion", scanLimiter, async (request, response) => {
         response.status(502).json({ error: error instanceof Error ? error.message : "AI-думка недоступна." });
     }
 });
-app.post("/api/ai-opinion-file", upload.single("file"), async (request, response) => {
+app.post("/api/ai-opinion-file", fileLimiter, upload.single("file"), async (request, response) => {
     try {
         if (!request.file) {
             response.status(400).json({ error: "Додайте файл для AI-думки." });
@@ -356,7 +429,7 @@ app.post("/api/humanize", scanLimiter, async (request, response) => {
         response.status(400).json({ error: error instanceof Error ? error.message : "Не вдалося олюднити текст." });
     }
 });
-app.post("/api/humanize-file", upload.single("file"), async (request, response) => {
+app.post("/api/humanize-file", fileLimiter, upload.single("file"), async (request, response) => {
     try {
         if (!request.file) {
             response.status(400).json({ error: "Додайте файл для олюднення." });
@@ -378,7 +451,26 @@ app.post("/api/humanize-file", upload.single("file"), async (request, response) 
         response.status(400).json({ error: error instanceof Error ? error.message : "Не вдалося олюднити файл." });
     }
 });
-app.post("/api/export-docx", upload.single("file"), async (request, response) => {
+app.post("/api/diff", scanLimiter, async (request, response) => {
+    try {
+        const { original, modified } = request.body;
+        if (typeof original !== "string" || typeof modified !== "string") {
+            response.status(400).json({ error: "Очікуються рядки original та modified." });
+            return;
+        }
+        // Захист від надто великих текстів, що можуть повісити diff (до ~50k символів)
+        if (original.length > 50000 || modified.length > 50000) {
+            response.status(400).json({ error: "Текст занадто великий для швидкого порівняння (ліміт 50 000 символів)." });
+            return;
+        }
+        const diffResult = diff.diffWordsWithSpace(original, modified);
+        response.json(diffResult);
+    }
+    catch (error) {
+        response.status(500).json({ error: "Помилка при порівнянні текстів." });
+    }
+});
+app.post("/api/export-docx", fileLimiter, upload.single("file"), async (request, response) => {
     try {
         if (!request.file) {
             response.status(400).json({ error: "Додайте вихідний DOCX-файл." });
