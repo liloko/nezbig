@@ -1,5 +1,6 @@
 import "dotenv/config";
 import crypto from "crypto";
+import helmet from "helmet";
 import cors from "cors";
 import express from "express";
 import multer from "multer";
@@ -22,6 +23,22 @@ import { hydrateSearchCandidatesDetailed, searchWebCandidatesDetailed } from "./
 import type { FileEvidence, HumanizeRequest, LlmOpinionRequest, PlagiarismMatch, ScanReport, ScanRequest, ScanSettings, SearchDiagnostics } from "../shared/types.js";
 
 export const app = express();
+app.use(helmet({
+  contentSecurityPolicy: {
+    directives: {
+      defaultSrc: ["'self'"],
+      scriptSrc: ["'self'", "'unsafe-inline'"],
+      styleSrc: ["'self'", "'unsafe-inline'", "https://fonts.googleapis.com"],
+      fontSrc: ["'self'", "https://fonts.gstatic.com"],
+      imgSrc: ["'self'", "data:", "blob:"],
+      connectSrc: ["'self'", "https://api.github.com"],
+      frameAncestors: ["'none'"],
+      baseUri: ["'self'"],
+      formAction: ["'self'"],
+    },
+  },
+  crossOriginEmbedderPolicy: false,
+}));
 app.set("trust proxy", 1);
 
 const logger = pino({ level: process.env.LOG_LEVEL || "info" });

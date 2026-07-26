@@ -1,6 +1,7 @@
 import type { ScanReport } from "../../shared/types";
 import { SignalCard } from "./SignalCard";
 import { reliabilityLabel, languageLabel, formatNumber, isDuplicateOpinionSignal } from "../utils/reportLabels";
+import { stripHtml } from "../utils/sanitizeHtml";
 
 interface AiAnalysisPanelProps {
   report: ScanReport;
@@ -44,12 +45,12 @@ export function AiAnalysisPanel({ report, llmBusy, primarySignals }: AiAnalysisP
           </span>
         ) : null}
       </div>
-      {report.aiNote ? <p className="provider-note">{report.aiNote}</p> : null}
+      {report.aiNote ? <p className="provider-note">{stripHtml(report.aiNote)}</p> : null}
       {report.aiOpinionProbability !== undefined ? (
         <div className="opinion-panel">
           <strong>AI-думка: {report.aiOpinionProbability}%</strong>
           <span>{report.aiOpinionModel}</span>
-          {report.aiOpinionNote ? <p>{report.aiOpinionNote}</p> : null}
+          {report.aiOpinionNote ? <p>{stripHtml(report.aiOpinionNote)}</p> : null}
         </div>
       ) : null}
       <p className="section-note">

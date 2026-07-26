@@ -1,5 +1,6 @@
 import type { ScanReport } from "../../shared/types";
 import { ProviderIcon } from "./ProviderIcon";
+import { stripHtml } from "../utils/sanitizeHtml";
 
 function formatNumber(value: number): string {
   return new Intl.NumberFormat("uk-UA").format(value);
@@ -49,10 +50,10 @@ export function PlagiarismMatches({
               </div>
               <h4>
                 <a href={match.url} target="_blank" rel="noreferrer">
-                  {match.title}
+                  {stripHtml(match.title)}
                 </a>
               </h4>
-              <p>{match.snippet}</p>
+              <p>{stripHtml(match.snippet)}</p>
               {match.confidence === "page" && match.submittedEvidence ? (
                 <div className="match-evidence">
                   <strong>Підтверджений спільний уривок</strong>
