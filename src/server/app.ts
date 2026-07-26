@@ -6,7 +6,7 @@ import multer from "multer";
 import pino from "pino";
 import { rateLimit } from "express-rate-limit";
 import { ScanRequestSchema, ScanSettingsSchema, LlmOpinionRequestSchema, HumanizeRequestSchema } from "../shared/validation.js";
-import { saveReport, getReport } from "./db.js";
+import { saveReport, getReport, redis } from "./db.js";
 import { scanJobCache, reportCache } from "./jobStore.js";
 import { chunkText, countWords } from "./chunking.js";
 import { prepareDocumentText } from "./documentPreprocess.js";
@@ -304,6 +304,31 @@ app.get("/api/scan-status/:jobId", async (request, response) => {
     response.json(job);
   } catch (error) {
     response.status(500).json({ error: "Помилка сервера" });
+  }
+});
+
+app.get("/api/history", async (_req, res) => {
+  if (!redis) {
+    res.json([]);
+    return;
+  }
+  try {
+    const ids = await redis.zrevrange("history:index", 0, 9);
+    const pipeline = redis.pipeline();
+    for (const id of ids) pipeline.get(`history:${id}`);
+    const results = await pipeline.exec();
+    const items = (results || []).map(([err, data]) => {
+      if (err || !data) return null;
+      try {
+        const r = JSON.parse(data as string);
+        return { id: r.id, fileName: r.fileName, checkedAt: r.checkedAt, plagiarismScore: r.plagiarismScore };
+      } catch {
+        return null;
+      }
+    }).filter(Boolean);
+    res.json(items);
+  } catch (error) {
+    res.status(500).json({ error: "Помилка при завантаженні історії" });
   }
 });
 

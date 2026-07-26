@@ -7,8 +7,13 @@ export function useScan() {
   const [progress, setProgress] = useState<{ checked: number; total: number } | null>(null);
   const [error, setError] = useState<string | null>(null);
   const abortControllerRef = useRef<AbortController | null>(null);
+  const timeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const cancel = useCallback(() => {
+    if (timeoutRef.current) {
+      clearTimeout(timeoutRef.current);
+      timeoutRef.current = null;
+    }
     if (abortControllerRef.current) {
       abortControllerRef.current.abort();
       abortControllerRef.current = null;
@@ -72,6 +77,7 @@ export function useScan() {
             }
 
             if (statusPayload.status === "completed") {
+              timeoutRef.current = null;
               setReport(statusPayload.result);
               setBusy(false);
               resolve(statusPayload.result);
@@ -81,24 +87,31 @@ export function useScan() {
               if (statusPayload.progress) {
                 setProgress({ checked: statusPayload.progress.chunksChecked, total: statusPayload.progress.totalChunks });
               }
-              setTimeout(poll, 2000);
+              timeoutRef.current = setTimeout(poll, 2000);
             }
           } catch (err) {
             setBusy(false);
+            if (err instanceof Error && err.name === "AbortError") {
+              reject(err);
+              return;
+            }
             const errMsg = err instanceof Error ? err.message : String(err);
             setError(errMsg);
             reject(new Error(errMsg));
           }
         };
-        setTimeout(poll, 2000);
+        timeoutRef.current = setTimeout(poll, 2000);
       });
     } catch (err) {
       setBusy(false);
+      if (err instanceof Error && err.name === "AbortError") {
+        throw err;
+      }
       const errMsg = err instanceof Error ? err.message : String(err);
       setError(errMsg);
       throw new Error(errMsg);
     }
   }, []);
 
-  return { report, setReport, busy, progress, error, scan, cancel };
+  return { report, setReport, busy, progress, scan, cancel };
 }

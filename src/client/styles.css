@@ -1581,3 +1581,22 @@ progress::-moz-progress-bar {
     transform: scaleX(1);
   }
 }
+
+.drop-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(17, 24, 23, 0.7);
+  backdrop-filter: blur(4px);
+  z-index: 100;
+  display: grid;
+  place-items: center;
+}
+
+.drop-zone {
+  border: 3px dashed var(--accent);
+  border-radius: 16px;
+  padding: 3rem 4rem;
+  color: var(--text);
+  font-size: 1.25rem;
+  background: var(--surface);
+}

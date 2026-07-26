@@ -7,6 +7,8 @@ import { useAiOpinion } from "./hooks/useAiOpinion";
 import { useHumanize } from "./hooks/useHumanize";
 import { useDocumentEditor } from "./hooks/useDocumentEditor";
 import { useWordExport } from "./hooks/useWordExport";
+import { useDragDrop } from "./hooks/useDragDrop";
+import { useDraft, clearDraft } from "./hooks/useDraft";
 
 // Utils
 import { defaultSettings, recommendSettings, estimateScanSeconds, formatDuration } from "./utils/scanSettings";
@@ -24,13 +26,25 @@ export default function App() {
   const [settings, setSettings] = useState<ScanSettings>(defaultSettings);
   const [message, setMessage] = useState("");
   const reportRef = useRef<HTMLElement | null>(null);
+  const mainRef = useRef<HTMLElement>(null);
 
   // Hooks
   const editor = useDocumentEditor(setMessage);
-  const { report, setReport, busy, progress, error, scan, cancel } = useScan();
+  const { report, setReport, busy, progress, scan, cancel } = useScan();
   const { llmBusy, loadLlmOpinion } = useAiOpinion(setReport);
   const { humanized, setHumanized, humanizerBusy, handleHumanize } = useHumanize();
   const wordExport = useWordExport(setMessage);
+
+  const isDragging = useDragDrop(mainRef, (file) => {
+    setReport(null);
+    setHumanized(null);
+    void editor.handleFile(file);
+  });
+
+  useDraft(editor.text, editor.sourceHtml, editor.fileName, (draft) => {
+    editor.setEditorContent(draft.html, draft.text);
+    editor.setFileName(draft.fileName);
+  });
 
   // Derived state
   const wordCount = useMemo(() => editor.text.trim().split(/\s+/).filter(Boolean).length, [editor.text]);
@@ -70,6 +84,7 @@ export default function App() {
 
     try {
       const result = await scan(editor.text, editor.fileName, editor.selectedFile, scanSettings);
+      clearDraft();
       setMessage("Базовий звіт готовий. AI-думка підвантажується окремо…");
       void loadLlmOpinion(result, editor.text, editor.selectedFile).catch(() => {
         setMessage("Базовий звіт готовий. AI-думка зараз недоступна, використано локальний аналіз.");
@@ -116,7 +131,14 @@ export default function App() {
       <a className="skip-link" href="#checker">
         Перейти до перевірки
       </a>
-      <main className="app-shell">
+      <main ref={mainRef} className="app-shell">
+        {isDragging && (
+          <div className="drop-overlay">
+            <div className="drop-zone">
+              <p>Відпустіть файл для завантаження</p>
+            </div>
+          </div>
+        )}
         <section className="intro" aria-labelledby="page-title">
           <div className="brand-lockup">
             <BrandLogo spinning={busy || llmBusy} width={136} height={136} />
