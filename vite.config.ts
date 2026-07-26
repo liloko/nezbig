@@ -8,10 +8,16 @@ export default defineConfig({
     VitePWA({
       registerType: "autoUpdate",
       manifest: {
-        name: "Незбіг",
+        name: "Незбіг — перевірка тексту на плагіат",
         short_name: "Незбіг",
+        description: "Безкоштовна перевірка тексту на плагіат, AI-сліди та відкриті вебджерела.",
         theme_color: "#2ec4b6",
-        icons: [{ src: "/logo.jpg", sizes: "192x192", type: "image/jpeg" }]
+        background_color: "#fbf7ed",
+        display: "standalone",
+        icons: [
+          { src: "/logo.jpg", sizes: "192x192", type: "image/jpeg" },
+          { src: "/logo.jpg", sizes: "512x512", type: "image/jpeg" }
+        ]
       }
     })
   ],
