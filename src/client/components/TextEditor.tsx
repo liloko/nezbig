@@ -12,6 +12,8 @@ interface TextEditorProps {
   onClearFile: () => void;
   onCopyFormatted: () => void;
   onDownloadFormatted: () => void;
+  draftSaved: boolean;
+  wordCount: number;
 }
 
 export function TextEditor({
@@ -25,14 +27,19 @@ export function TextEditor({
   onFileChange,
   onClearFile,
   onCopyFormatted,
-  onDownloadFormatted
+  onDownloadFormatted,
+  draftSaved,
+  wordCount
 }: TextEditorProps) {
   return (
     <section className="input-panel" aria-labelledby="input-title">
       <div className="panel-heading">
         <div>
           <h2 id="input-title">Документ</h2>
-          <p>{selectedFile ? `${fileName} - ${(selectedFile.size / 1024 / 1024).toFixed(2)} MB` : fileName}</p>
+          <p>
+            {selectedFile ? `${fileName} - ${(selectedFile.size / 1024 / 1024).toFixed(2)} MB` : fileName}
+            {draftSaved && <span className="draft-saved"> · Збережено</span>}
+          </p>
         </div>
         <label className="file-button">
           <input
@@ -43,6 +50,7 @@ export function TextEditor({
           />
           Завантажити файл
         </label>
+        <p className="file-hint">або перетягніть файл сюди</p>
       </div>
 
       <label className="text-label" htmlFor="source-text">
@@ -68,6 +76,38 @@ export function TextEditor({
         onInput={onInput}
         onPaste={onPaste}
       />
+      
+      {sourceHtml.trim().length === 0 && !selectedFile && (
+        <div className="editor-empty-state">
+          <p>Вставте текст із Word або перетягніть файл сюди</p>
+          <button
+            type="button"
+            className="secondary-button"
+            onClick={() => {
+              const sample = "Штучний інтелект (ШІ) — це галузь комп'ютерних наук, яка займається створенням систем, здатних виконувати завдання, що зазвичай потребують людського інтелекту. До таких завдань належать розпізнавання мови, прийняття рішень, візуальне сприйняття та переклад текстів. Сучасні моделі ШІ, зокрема великі мовні моделі, здатні генерувати тексти, які важко відрізнити від написаних людиною...";
+              onFileChange(null);
+              if (editorRef.current) {
+                editorRef.current.innerText = sample;
+                onInput();
+              }
+            }}
+          >
+            Вставити приклад
+          </button>
+        </div>
+      )}
+
+      <div className="editor-footer">
+        <span className="word-count">
+          {wordCount} {wordCount === 1 ? "слово" : wordCount < 5 ? "слова" : "слів"}
+        </span>
+        {wordCount > 0 && wordCount < 120 && (
+          <span className="word-count-hint">
+            Ще {120 - wordCount} {120 - wordCount === 1 ? "слово" : 120 - wordCount < 5 ? "слова" : "слів"} до мінімуму
+          </span>
+        )}
+      </div>
+
       {sourceHtml.trim() ? (
         <div className="format-actions" aria-label="Дії з форматованим текстом">
           <button type="button" className="secondary-button" onClick={onCopyFormatted}>

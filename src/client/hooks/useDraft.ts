@@ -1,4 +1,4 @@
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState, useCallback } from "react";
 
 const DRAFT_KEY = "nezbig:draft";
 
@@ -10,6 +10,7 @@ interface Draft {
 }
 
 export function useDraft(text: string, html: string, fileName: string, onRestore: (d: Draft) => void) {
+  const [draftSaved, setDraftSaved] = useState(false);
   const timeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   useEffect(() => {
@@ -17,6 +18,8 @@ export function useDraft(text: string, html: string, fileName: string, onRestore
     if (timeoutRef.current) clearTimeout(timeoutRef.current);
     timeoutRef.current = setTimeout(() => {
       localStorage.setItem(DRAFT_KEY, JSON.stringify({ text, html, fileName, savedAt: new Date().toISOString() }));
+      setDraftSaved(true);
+      setTimeout(() => setDraftSaved(false), 2000);
     }, 3000);
     return () => {
       if (timeoutRef.current) clearTimeout(timeoutRef.current);
@@ -40,6 +43,8 @@ export function useDraft(text: string, html: string, fileName: string, onRestore
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
-}
 
-export const clearDraft = () => localStorage.removeItem(DRAFT_KEY);
+  const clearDraft = useCallback(() => localStorage.removeItem(DRAFT_KEY), []);
+
+  return { clearDraft, draftSaved };
+}

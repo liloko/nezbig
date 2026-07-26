@@ -22,6 +22,7 @@ import { LoadingPanel } from "./components/LoadingPanel";
 import { HumanizePanel } from "./components/HumanizePanel";
 import { ReportView } from "./components/ReportView";
 import { HistoryPanel } from "./components/HistoryPanel";
+import { useFaviconProgress } from "./hooks/useFaviconProgress";
 
 export default function App() {
   const [settings, setSettings] = useState<ScanSettings>(defaultSettings);
@@ -42,14 +43,32 @@ export default function App() {
     void editor.handleFile(file);
   });
 
-  useDraft(editor.text, editor.sourceHtml, editor.fileName, (draft) => {
-    editor.setEditorContent(draft.html, draft.text);
-    editor.setFileName(draft.fileName);
-  });
+  const { isDragging } = useDragDrop(editor.handleFile);
+  const { draftSaved, clearDraft } = useDraft(editor);
+
+  useFaviconProgress(progress);
+
+  useEffect(() => {
+    const handler = (e: KeyboardEvent) => {
+      if (e.ctrlKey && e.key === "Enter" && !busy && editor.text.length >= 120) {
+        e.preventDefault();
+        const fakeEvent = { preventDefault: () => {} } as React.FormEvent;
+        handleSubmit(fakeEvent);
+      }
+      if (e.ctrlKey && e.key === "k") {
+        e.preventDefault();
+        editor.setEditorContent("", "");
+        editor.setFileName("Вставлений текст");
+        editor.setSelectedFile(null);
+      }
+    };
+    window.addEventListener("keydown", handler);
+    return () => window.removeEventListener("keydown", handler);
+  }, [busy, editor, handleSubmit]);
 
   // Derived state
   const wordCount = useMemo(() => editor.text.trim().split(/\s+/).filter(Boolean).length, [editor.text]);
-  const canScan = (editor.selectedFile !== null || editor.text.trim().length >= 120) && !busy;
+  const canScan = editor.text.length >= 120 && !busy;
   const canHumanize = (editor.selectedFile !== null || wordCount >= 20) && !humanizerBusy;
   const estimatedSeconds = useMemo(() => estimateScanSeconds(settings, wordCount), [settings, wordCount]);
 
@@ -182,13 +201,18 @@ export default function App() {
               setHumanized(null);
               void editor.handleFile(file);
             }}
-            onClearFile={editor.clearFile}
+            onClearFile={() => {
+              editor.setSelectedFile(null);
+              editor.setFileName("Вставлений текст");
+            }}
             onCopyFormatted={() => void wordExport.copyFormattedForWord(sanitizeRichHtml(editor.sourceHtml), editor.text)}
             onDownloadFormatted={() =>
               editor.selectedFile
                 ? wordExport.downloadOriginalFile(editor.selectedFile)
                 : wordExport.downloadFormattedForWord(editor.sourceHtml, editor.fileName)
             }
+            draftSaved={draftSaved}
+            wordCount={wordCount}
           />
           <ScanSettingsPanel
             settings={settings}
@@ -230,6 +254,17 @@ export default function App() {
         {report ? (
           <ReportView report={report} llmBusy={llmBusy} reportRef={reportRef} />
         ) : null}
+
+        <footer className="app-footer">
+          <p>Незбіг — безкоштовна перевірка тексту на плагіат та AI-сліди</p>
+          <div className="footer-links">
+            <a href="https://github.com/vadapadix/nezbig" target="_blank" rel="noopener noreferrer">GitHub</a>
+            <span>·</span>
+            <a href="/privacy.html">Privacy</a>
+            <span>·</span>
+            <span>v1.0.0</span>
+          </div>
+        </footer>
       </main>
     </>
   );
