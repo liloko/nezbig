@@ -1965,6 +1965,8 @@ progress::-moz-progress-bar {
 .footer-links {
   display: flex;
   justify-content: center;
+  align-items: center;
+  flex-wrap: wrap;
   gap: 0.5rem;
   margin-top: 0.5rem;
 }
@@ -1990,11 +1992,11 @@ progress::-moz-progress-bar {
 }
 
 .app-tab {
-  background: var(--surface);
-  border: 1px solid var(--border);
+  background: var(--field);
+  border: 1px solid var(--line);
   font-size: 1rem;
   font-weight: 500;
-  color: var(--text);
+  color: var(--muted);
   cursor: pointer;
   padding: 0.6rem 1.5rem;
   border-radius: 99px;
@@ -2008,9 +2010,9 @@ progress::-moz-progress-bar {
 }
 
 .app-tab.active {
-  color: var(--bg);
-  background: var(--text);
-  border-color: var(--text);
+  color: var(--paper);
+  background: var(--ink);
+  border-color: var(--ink);
 }
 
 /* ================= Diff Mode ================= */
@@ -2044,7 +2046,7 @@ progress::-moz-progress-bar {
 
 .diff-input-group label {
   font-weight: 500;
-  color: var(--text);
+  color: var(--ink);
 }
 
 .diff-textarea {
@@ -2124,11 +2126,11 @@ progress::-moz-progress-bar {
 .toast {
   padding: 0.875rem 1.25rem;
   border-radius: 10px;
-  background: var(--surface);
+  background: var(--paper);
   border: 1px solid var(--line);
   box-shadow: var(--shadow-lift);
   animation: slideInRight 0.3s var(--ease-out);
-  color: var(--text);
+  color: var(--ink);
   font-size: 0.9rem;
   pointer-events: auto;
 }
@@ -2165,22 +2167,23 @@ progress::-moz-progress-bar {
 }
 
 .modal-content {
-  background: var(--surface);
+  background: var(--paper);
   border-radius: 12px;
   padding: 2rem;
   width: 90%;
   max-width: 500px;
   box-shadow: var(--shadow-lift);
   animation: slideUp 0.3s var(--ease-out);
+  color: var(--ink);
 }
 
 .feedback-textarea {
   width: 100%;
   padding: 0.75rem;
-  border: 1px solid var(--border);
+  border: 1px solid var(--line);
   border-radius: 8px;
-  background: var(--bg);
-  color: var(--text);
+  background: var(--field);
+  color: var(--ink);
   font-family: inherit;
   resize: vertical;
   margin: 1rem 0;
