@@ -1,4 +1,4 @@
-import { FormEvent, useEffect, useMemo, useRef, useState } from "react";
+import { FormEvent, useEffect, useMemo, useRef, useState, useCallback } from "react";
 import type { ScanSettings } from "../shared/types";
 
 // Hooks
@@ -8,7 +8,7 @@ import { useHumanize } from "./hooks/useHumanize";
 import { useDocumentEditor } from "./hooks/useDocumentEditor";
 import { useWordExport } from "./hooks/useWordExport";
 import { useDragDrop } from "./hooks/useDragDrop";
-import { useDraft, clearDraft } from "./hooks/useDraft";
+import { useDraft } from "./hooks/useDraft";
 
 // Utils
 import { defaultSettings, recommendSettings, estimateScanSeconds, formatDuration } from "./utils/scanSettings";
@@ -45,17 +45,18 @@ export default function App() {
     void editor.handleFile(file);
   });
 
-  const { isDragging } = useDragDrop(editor.handleFile);
-  const { draftSaved, clearDraft } = useDraft(editor);
-
+  const { draftSaved, clearDraft } = useDraft(editor.text, editor.sourceHtml, editor.fileName, (draft) => {
+    editor.setEditorContent(draft.html, draft.text);
+    editor.setFileName(draft.fileName);
+  });
   useFaviconProgress(progress);
 
   useEffect(() => {
     const handler = (e: KeyboardEvent) => {
       if (e.ctrlKey && e.key === "Enter" && !busy && editor.text.length >= 120) {
         e.preventDefault();
-        const fakeEvent = { preventDefault: () => {} } as React.FormEvent;
-        handleSubmit(fakeEvent);
+        const fakeEvent = { preventDefault: () => {} } as unknown as FormEvent<HTMLFormElement>;
+        void handleSubmit(fakeEvent);
       }
       if (e.ctrlKey && e.key === "k") {
         e.preventDefault();
