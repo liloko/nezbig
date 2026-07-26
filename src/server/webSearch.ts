@@ -1,4 +1,5 @@
 import * as cheerio from "cheerio";
+import { franc } from "franc-min";
 import { excerptForSearch, normalizeWhitespace } from "./chunking.js";
 import { ProviderCircuitBreaker } from "./providerCircuitBreaker.js";
 import { ProviderTaskScheduler } from "./providerTaskScheduler.js";
@@ -163,7 +164,7 @@ async function searchDuckDuckGo(query: string, maxResults: number): Promise<Sear
   const cached = await searchCache.get(key);
   if (cached) return cached;
 
-  const runSearxngFallback = async (): Promise<SearchCandidate[]> => {
+  const runSearxng = async (): Promise<SearchCandidate[]> => {
     const searxngUrl = process.env.SEARXNG_URL;
     if (!searxngUrl) return [];
 
@@ -184,12 +185,21 @@ async function searchDuckDuckGo(query: string, maxResults: number): Promise<Sear
           url: r.url!,
           snippet: normalizeWhitespace(r.content!),
           query,
-          provider: "DuckDuckGo (SearXNG Fallback)"
+          provider: process.env.SEARXNG_URL ? "SearXNG" : "DuckDuckGo (SearXNG Fallback)"
         }));
     } catch {
       return [];
     }
   };
+
+  const hasSearxng = !!process.env.SEARXNG_URL;
+  if (hasSearxng) {
+    const searxResults = await runSearxng();
+    if (searxResults.length > 0) {
+      await searchCache.set(key, searxResults);
+      return searxResults;
+    }
+  }
 
   try {
     const { search, SafeSearchType } = await import("duck-duck-scrape");
@@ -217,12 +227,15 @@ async function searchDuckDuckGo(query: string, maxResults: number): Promise<Sear
     // Silently fall back
   }
 
-  // Fallback to SearXNG if primary scrape fails
-  const fallback = await runSearxngFallback();
-  if (fallback.length > 0) {
-    await searchCache.set(key, fallback);
+  if (!hasSearxng) {
+    const fallback = await runSearxng();
+    if (fallback.length > 0) {
+      await searchCache.set(key, fallback);
+    }
+    return fallback;
   }
-  return fallback;
+  
+  return [];
 }
 
 async function searchGoogleCustom(query: string, maxResults: number): Promise<SearchCandidate[]> {
@@ -282,7 +295,10 @@ async function searchWikipedia(query: string, maxResults: number): Promise<Searc
   const plainQuery = query.replaceAll('"', "").trim();
   if (plainQuery.length < 10) return [];
 
-  const url = new URL("https://uk.wikipedia.org/w/api.php");
+  const lang = franc(plainQuery);
+  const prefix = lang === 'eng' ? 'en' : (lang === 'rus' ? 'ru' : 'uk');
+
+  const url = new URL(`https://${prefix}.wikipedia.org/w/api.php`);
   url.searchParams.set("action", "query");
   url.searchParams.set("list", "search");
   url.searchParams.set("srsearch", plainQuery);
@@ -310,7 +326,7 @@ async function searchWikipedia(query: string, maxResults: number): Promise<Searc
         const cleanSnippet = item.snippet!.replace(/<[^>]+>/g, "");
         return {
           title: item.title! + " - Wikipedia",
-          url: `https://uk.wikipedia.org/wiki/?curid=${item.pageid}`,
+          url: `https://${prefix}.wikipedia.org/wiki/?curid=${item.pageid}`,
           snippet: normalizeWhitespace(cleanSnippet),
           query,
           provider: "Wikipedia"

@@ -1,9 +1,6 @@
 import type { HumanizeResult } from "../../shared/types";
 import { htmlFromPlainText, sanitizeRichHtml } from "../richText";
-
-function formatNumber(value: number): string {
-  return new Intl.NumberFormat("uk-UA").format(value);
-}
+import { formatNumber } from "../utils/reportLabels";
 
 interface HumanizePanelProps {
   humanized: HumanizeResult;

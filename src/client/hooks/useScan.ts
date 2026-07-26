@@ -4,6 +4,7 @@ import type { ScanReport, ScanSettings } from "../../shared/types";
 export function useScan() {
   const [report, setReport] = useState<ScanReport | null>(null);
   const [busy, setBusy] = useState(false);
+  const [progress, setProgress] = useState<{ checked: number; total: number } | null>(null);
   const [error, setError] = useState<string | null>(null);
 
   const scan = useCallback(async (
@@ -15,6 +16,7 @@ export function useScan() {
     setBusy(true);
     setError(null);
     setReport(null);
+    setProgress(null);
 
     try {
       let response: Response;
@@ -36,6 +38,12 @@ export function useScan() {
         throw new Error(payload.error || "Failed to start scan job.");
       }
 
+      if (payload.status === "completed" && payload.result) {
+        setReport(payload.result);
+        setBusy(false);
+        return payload.result;
+      }
+
       const jobId = payload.jobId;
 
       return await new Promise<ScanReport>((resolve, reject) => {
@@ -55,6 +63,9 @@ export function useScan() {
             } else if (statusPayload.status === "error") {
               throw new Error(statusPayload.error || "Job error.");
             } else {
+              if (statusPayload.progress) {
+                setProgress({ checked: statusPayload.progress.chunksChecked, total: statusPayload.progress.totalChunks });
+              }
               setTimeout(poll, 2000);
             }
           } catch (err) {
@@ -74,5 +85,5 @@ export function useScan() {
     }
   }, []);
 
-  return { report, setReport, busy, error, scan };
+  return { report, setReport, busy, progress, error, scan };
 }

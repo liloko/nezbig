@@ -9,18 +9,20 @@ if (redis) {
   console.log("[Redis] Connected for History & Cache");
 }
 
-export async function saveReport(reportId: string, report: any): Promise<void> {
+import type { ScanReport } from "../shared/types.js";
+
+export async function saveReport(reportId: string, report: ScanReport): Promise<void> {
   if (!redis) return;
   // Expire history in 30 days
   await redis.set(`history:${reportId}`, JSON.stringify(report), "EX", 60 * 60 * 24 * 30);
 }
 
-export async function getReport(reportId: string): Promise<any | null> {
+export async function getReport(reportId: string): Promise<ScanReport | null> {
   if (!redis) return null;
   const data = await redis.get(`history:${reportId}`);
   if (!data) return null;
   try {
-    return JSON.parse(data);
+    return JSON.parse(data) as ScanReport;
   } catch {
     return null;
   }

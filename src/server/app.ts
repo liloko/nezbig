@@ -1,4 +1,5 @@
 import "dotenv/config";
+import crypto from "crypto";
 import cors from "cors";
 import express from "express";
 import multer from "multer";
@@ -6,7 +7,7 @@ import pino from "pino";
 import { rateLimit } from "express-rate-limit";
 import { ScanRequestSchema, ScanSettingsSchema, LlmOpinionRequestSchema, HumanizeRequestSchema } from "../shared/validation.js";
 import { saveReport, getReport } from "./db.js";
-import { scanJobCache } from "./jobStore.js";
+import { scanJobCache, reportCache } from "./jobStore.js";
 import { chunkText, countWords } from "./chunking.js";
 import { prepareDocumentText } from "./documentPreprocess.js";
 import { mergeRevisedTextIntoHtml } from "./formattedDocument.js";
@@ -117,7 +118,7 @@ type ChunkSearchResult = {
   diagnostics: SearchDiagnostics;
 };
 
-async function runScan(request: ScanRequest, fileEvidence?: FileEvidence): Promise<ScanReport> {
+async function runScan(request: ScanRequest, fileEvidence?: FileEvidence, onProgress?: (checked: number, total: number) => void): Promise<ScanReport> {
   const prepared = prepareDocumentText(request.text);
   const text = prepared.text;
   if (text.length < 120) {
@@ -148,6 +149,10 @@ async function runScan(request: ScanRequest, fileEvidence?: FileEvidence): Promi
       const diagnostics = emptySearchDiagnostics();
       diagnostics.providers.push({ provider: "Пошуковий pipeline", attempted: 1, succeeded: 0, failed: 1, timedOut: 0, results: 0 });
       return { matches: [], diagnostics };
+    } finally {
+      if (onProgress) {
+        onProgress(chunk.index + 1, chunks.length);
+      }
     }
   });
   const preliminaryMatches = matchedByChunk.flatMap((result) => result.matches);
@@ -236,21 +241,42 @@ app.post("/api/scan", scanLimiter, async (request, response) => {
 app.post("/api/scan/jobs", scanLimiter, async (request, response) => {
   try {
     const parsed = ScanRequestSchema.parse(request.body);
+    const settings = sanitizeSettings(parsed.settings);
+    
+    const textHash = crypto.createHash("sha256").update(parsed.text).digest("hex");
+    const reportKey = `${textHash}:${settings.sensitivity}`;
+    const cached = await reportCache.get(reportKey);
+    
+    if (cached) {
+      response.json({ jobId: cached.id, status: "completed", result: cached });
+      return;
+    }
+
     const jobId = crypto.randomUUID();
+
+    if (process.env.VERCEL === "1") {
+      const report = await runScan(parsed as unknown as ScanRequest);
+      await saveReport(report.id, report);
+      response.json({ jobId: jobId, status: "completed", result: report });
+      return;
+    }
+
     await scanJobCache.set(jobId, { id: jobId, status: "pending", createdAt: new Date().toISOString() });
 
     Promise.resolve().then(async () => {
       try {
         await scanJobCache.set(jobId, { id: jobId, status: "processing", createdAt: new Date().toISOString() });
-        const report = await runScan(parsed as unknown as ScanRequest);
+        const report = await runScan(parsed as unknown as ScanRequest, undefined, (checked, total) => {
+          scanJobCache.set(jobId, { id: jobId, status: "processing", progress: { chunksChecked: checked, totalChunks: total }, createdAt: new Date().toISOString() }).catch(() => {});
+        });
         
-        // Store report with jobId as history ID to avoid regenerating random UUIDs if possible, or use report.id
         await saveReport(report.id, report);
+        await reportCache.set(reportKey, report);
         
-        await scanJobCache.set(jobId, { id: jobId, status: "completed", result: report, createdAt: new Date().toISOString() });
+        await scanJobCache.set(jobId, { id: jobId, status: "completed", result: report, createdAt: new Date().toISOString() }, 1000 * 60 * 30);
       } catch (error) {
         logger.error(error);
-        await scanJobCache.set(jobId, { id: jobId, status: "error", error: error instanceof Error ? error.message : "Помилка при перевірці", createdAt: new Date().toISOString() });
+        await scanJobCache.set(jobId, { id: jobId, status: "error", error: error instanceof Error ? error.message : "Помилка при перевірці", createdAt: new Date().toISOString() }, 1000 * 60 * 10);
       }
     });
 
@@ -310,23 +336,43 @@ app.post("/api/scan-file/jobs", fileLimiter, upload.single("file"), async (reque
     }
     const extracted = await extractTextFromUpload(request.file);
     const rawSettings = typeof request.body.settings === "string" ? JSON.parse(request.body.settings) : request.body.settings;
-    const settings = ScanSettingsSchema.parse(rawSettings);
-    const parsed = { text: extracted.text, fileName: extracted.fileName, settings: settings as ScanSettings };
+    const settings = ScanSettingsSchema.parse(rawSettings) as ScanSettings;
+    const parsed = { text: extracted.text, fileName: extracted.fileName, settings };
+
+    const textHash = crypto.createHash("sha256").update(parsed.text).digest("hex");
+    const reportKey = `${textHash}:${settings.sensitivity}`;
+    const cached = await reportCache.get(reportKey);
+    
+    if (cached) {
+      response.json({ jobId: cached.id, status: "completed", result: cached });
+      return;
+    }
 
     const jobId = crypto.randomUUID();
+
+    if (process.env.VERCEL === "1") {
+      const report = await runScan(parsed, extracted.fileEvidence);
+      await saveReport(report.id, report);
+      response.json({ jobId: jobId, status: "completed", result: report });
+      return;
+    }
+
     await scanJobCache.set(jobId, { id: jobId, status: "pending", createdAt: new Date().toISOString() });
 
     Promise.resolve().then(async () => {
       try {
         await scanJobCache.set(jobId, { id: jobId, status: "processing", createdAt: new Date().toISOString() });
-        const report = await runScan(parsed, extracted.fileEvidence);
+        const report = await runScan(parsed, extracted.fileEvidence, (checked, total) => {
+          scanJobCache.set(jobId, { id: jobId, status: "processing", progress: { chunksChecked: checked, totalChunks: total }, createdAt: new Date().toISOString() }).catch(() => {});
+        });
         
         await saveReport(report.id, report);
+        await reportCache.set(reportKey, report);
         
-        await scanJobCache.set(jobId, { id: jobId, status: "completed", result: report, createdAt: new Date().toISOString() });
+        await scanJobCache.set(jobId, { id: jobId, status: "completed", result: report, createdAt: new Date().toISOString() }, 1000 * 60 * 30);
       } catch (error) {
         logger.error(error);
-        await scanJobCache.set(jobId, { id: jobId, status: "error", error: error instanceof Error ? error.message : "Помилка при перевірці", createdAt: new Date().toISOString() });
+        await scanJobCache.set(jobId, { id: jobId, status: "error", error: error instanceof Error ? error.message : "Помилка при перевірці", createdAt: new Date().toISOString() }, 1000 * 60 * 10);
       }
     });
 
@@ -361,7 +407,7 @@ app.post("/api/ai-opinion", scanLimiter, async (request, response) => {
   }
 });
 
-app.post("/api/ai-opinion-file", upload.single("file"), async (request, response) => {
+app.post("/api/ai-opinion-file", fileLimiter, upload.single("file"), async (request, response) => {
   try {
     if (!request.file) {
       response.status(400).json({ error: "Додайте файл для AI-думки." });
@@ -405,7 +451,7 @@ app.post("/api/humanize", scanLimiter, async (request, response) => {
   }
 });
 
-app.post("/api/humanize-file", upload.single("file"), async (request, response) => {
+app.post("/api/humanize-file", fileLimiter, upload.single("file"), async (request, response) => {
   try {
     if (!request.file) {
       response.status(400).json({ error: "Додайте файл для олюднення." });
@@ -428,7 +474,7 @@ app.post("/api/humanize-file", upload.single("file"), async (request, response) 
   }
 });
 
-app.post("/api/export-docx", upload.single("file"), async (request, response) => {
+app.post("/api/export-docx", fileLimiter, upload.single("file"), async (request, response) => {
   try {
     if (!request.file) {
       response.status(400).json({ error: "Додайте вихідний DOCX-файл." });

@@ -16,3 +16,4 @@ export type ScanJob = {
 };
 
 export const scanJobCache = new DistributedCache<ScanJob>("scan-job", 1000 * 60 * 60 * 2, 200);
+export const reportCache = new DistributedCache<ScanReport>("scan-report", 1000 * 60 * 60 * 24 * 7, 500);
