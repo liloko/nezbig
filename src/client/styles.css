@@ -1977,3 +1977,129 @@ progress::-moz-progress-bar {
 .footer-links a:hover {
   color: var(--accent);
 }
+
+/* ================= Tabs ================= */
+.app-tabs {
+  display: flex;
+  gap: 1rem;
+  margin-bottom: 1.5rem;
+  border-bottom: 1px solid var(--line);
+  padding-bottom: 0;
+}
+
+.app-tab {
+  background: none;
+  border: none;
+  font-size: 1.05rem;
+  font-weight: 500;
+  color: var(--muted);
+  cursor: pointer;
+  padding: 0.5rem 1rem;
+  border-radius: 8px 8px 0 0;
+  transition: all 0.2s ease;
+  position: relative;
+  top: 1px;
+}
+
+.app-tab:hover {
+  color: var(--text);
+  background: rgba(46, 196, 182, 0.05);
+}
+
+.app-tab.active {
+  color: var(--accent);
+  border-bottom: 2px solid var(--accent);
+  background: transparent;
+}
+
+/* ================= Diff Mode ================= */
+
+.diff-panel {
+  padding: 1.5rem;
+}
+
+.diff-inputs {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 1.5rem;
+  margin-bottom: 1.5rem;
+}
+
+@media (min-width: 768px) {
+  .diff-inputs {
+    grid-template-columns: 1fr 1fr;
+  }
+}
+
+.diff-input-group {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.diff-input-group label {
+  font-weight: 500;
+  color: var(--text);
+}
+
+.diff-textarea {
+  min-height: 200px;
+  max-height: 400px;
+  resize: vertical;
+  padding: 1rem;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--bg);
+  color: var(--text);
+  font-family: inherit;
+  font-size: 0.95rem;
+  line-height: 1.6;
+}
+
+.diff-textarea:focus {
+  outline: none;
+  border-color: var(--accent);
+  box-shadow: 0 0 0 2px rgba(46, 196, 182, 0.1);
+}
+
+.diff-actions {
+  display: flex;
+  gap: 1rem;
+  margin-bottom: 1.5rem;
+}
+
+.diff-result {
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 1.5rem;
+}
+
+.diff-result-title {
+  margin: 0 0 1rem 0;
+  font-size: 1.1rem;
+  color: var(--text);
+}
+
+.diff-content {
+  font-size: 1rem;
+  line-height: 1.6;
+  white-space: pre-wrap;
+  color: var(--text);
+}
+
+.diff-content ins {
+  background: rgba(46, 196, 182, 0.2);
+  text-decoration: none;
+  padding: 0 2px;
+  border-radius: 2px;
+  color: #11786f;
+}
+
+.diff-content del {
+  background: rgba(255, 93, 115, 0.2);
+  text-decoration: line-through;
+  padding: 0 2px;
+  border-radius: 2px;
+  color: #b52a3f;
+}

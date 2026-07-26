@@ -22,9 +22,11 @@ import { LoadingPanel } from "./components/LoadingPanel";
 import { HumanizePanel } from "./components/HumanizePanel";
 import { ReportView } from "./components/ReportView";
 import { HistoryPanel } from "./components/HistoryPanel";
+import { DiffPanel } from "./components/DiffPanel";
 import { useFaviconProgress } from "./hooks/useFaviconProgress";
 
 export default function App() {
+  const [appMode, setAppMode] = useState<"scan" | "diff">("scan");
   const [settings, setSettings] = useState<ScanSettings>(defaultSettings);
   const [message, setMessage] = useState("");
   const reportRef = useRef<HTMLElement | null>(null);
@@ -187,7 +189,28 @@ export default function App() {
 
         <HistoryPanel onSelect={handleLoadHistory} />
 
-        <form id="checker" className="workspace" onSubmit={handleSubmit}>
+        <div className="app-tabs" role="tablist">
+          <button 
+            role="tab" 
+            aria-selected={appMode === "scan"} 
+            className={`app-tab ${appMode === "scan" ? "active" : ""}`}
+            onClick={() => setAppMode("scan")}
+          >
+            Перевірка тексту
+          </button>
+          <button 
+            role="tab" 
+            aria-selected={appMode === "diff"} 
+            className={`app-tab ${appMode === "diff" ? "active" : ""}`}
+            onClick={() => setAppMode("diff")}
+          >
+            Порівняння текстів
+          </button>
+        </div>
+
+        {appMode === "scan" ? (
+          <>
+            <form id="checker" className="workspace" onSubmit={handleSubmit}>
           <TextEditor
             editorRef={editor.editorRef}
             selectedFile={editor.selectedFile}
@@ -251,9 +274,13 @@ export default function App() {
           />
         ) : null}
 
-        {report ? (
-          <ReportView report={report} llmBusy={llmBusy} reportRef={reportRef} />
-        ) : null}
+          {report ? (
+            <ReportView report={report} llmBusy={llmBusy} reportRef={reportRef} />
+          ) : null}
+          </>
+        ) : (
+          <DiffPanel />
+        )}
 
         <footer className="app-footer">
           <p>Незбіг — безкоштовна перевірка тексту на плагіат та AI-сліди</p>

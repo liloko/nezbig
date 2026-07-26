@@ -4,6 +4,7 @@ import cors from "cors";
 import express from "express";
 import multer from "multer";
 import pino from "pino";
+import * as diff from "diff";
 import { rateLimit } from "express-rate-limit";
 import { ScanRequestSchema, ScanSettingsSchema, LlmOpinionRequestSchema, HumanizeRequestSchema } from "../shared/validation.js";
 import { saveReport, getReport, redis } from "./db.js";
@@ -504,6 +505,27 @@ app.post("/api/humanize-file", fileLimiter, upload.single("file"), async (reques
     });
   } catch (error) {
     response.status(400).json({ error: error instanceof Error ? error.message : "Не вдалося олюднити файл." });
+  }
+});
+
+app.post("/api/diff", scanLimiter, async (request, response) => {
+  try {
+    const { original, modified } = request.body;
+    if (typeof original !== "string" || typeof modified !== "string") {
+      response.status(400).json({ error: "Очікуються рядки original та modified." });
+      return;
+    }
+    
+    // Захист від надто великих текстів, що можуть повісити diff (до ~50k символів)
+    if (original.length > 50000 || modified.length > 50000) {
+      response.status(400).json({ error: "Текст занадто великий для швидкого порівняння (ліміт 50 000 символів)." });
+      return;
+    }
+
+    const diffResult = diff.diffWordsWithSpace(original, modified);
+    response.json(diffResult);
+  } catch (error) {
+    response.status(500).json({ error: "Помилка при порівнянні текстів." });
   }
 });
 
