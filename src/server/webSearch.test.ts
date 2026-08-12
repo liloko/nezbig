@@ -1,6 +1,19 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { hydrateSearchCandidatesDetailed, searchWebCandidatesDetailed } from "./webSearch.js";
 
+vi.mock("duck-duck-scrape", () => ({
+  search: vi.fn().mockResolvedValue({
+    results: [
+      {
+        title: "Verified title",
+        url: "https://example.com/source",
+        description: "A sufficiently descriptive result snippet for the originality checker."
+      }
+    ]
+  }),
+  SafeSearchType: { OFF: -1 }
+}));
+
 afterEach(() => {
   vi.unstubAllGlobals();
   vi.restoreAllMocks();
@@ -32,15 +45,7 @@ describe("web search diagnostics", () => {
     vi.stubGlobal(
       "fetch",
       vi.fn().mockResolvedValue(
-        new Response(
-          `
-      <div class="result">
-        <div class="result__title"><a href="https://example.com/source">Verified title</a></div>
-        <div class="result__snippet">A sufficiently descriptive result snippet for the originality checker.</div>
-      </div>
-    `,
-          { status: 200, headers: { "content-type": "text/html" } }
-        )
+        new Response("{}", { status: 200, headers: { "content-type": "application/json" } })
       )
     );
 

@@ -10,7 +10,7 @@ describe("scoreCandidate", () => {
       snippet: "Academic integrity depends on careful citation and transparent research methods in student writing.",
       provider: "test",
       sourceText:
-        "Academic integrity depends on careful citation, transparent research methods, and original synthesis across multiple sources. Student writing should show careful citation, transparent research methods, and original synthesis."
+        "This is an extended introductory section added specifically to ensure that the document exceeds the minimum thirty word threshold required for confident page level plagiarism matching. Academic integrity depends on careful citation, transparent research methods, and original synthesis across multiple sources. Student writing should show careful citation, transparent research methods, and original synthesis."
     };
 
     const result = scoreCandidate(source, candidate, 0);
@@ -58,7 +58,7 @@ describe("scoreCandidate", () => {
         url: "https://example.com/page",
         snippet: "A source about academic integrity.",
         provider: "test",
-        sourceText: `Introductory material. ${source} Additional verified page content.`
+        sourceText: `Introductory material that is sufficiently long to pass the thirty words threshold. We must add a few more words here to be safe and ensure reliability. ${source} Additional verified page content that also helps increase the total word count for the test.`
       },
       0
     );

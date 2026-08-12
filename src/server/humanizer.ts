@@ -5,14 +5,14 @@ type Rule = {
   label: string;
   detail: string;
   pattern: RegExp;
-  replacement: string | ((match: string) => string);
+  replacement: string | ((match: string, ...groups: string[]) => string);
 };
 
 const RULES: Rule[] = [
   {
     label: "Прибрано чат-артефакти",
     detail: "Вилучено фрази на кшталт привітання, службового пояснення або запрошення продовжити діалог.",
-    pattern: /\b(?:great question|of course|certainly|i hope this helps|let me know if you(?:'|’)d like|here is an?|let'?s dive in|let'?s explore)\b[.!?\s]*/gi,
+    pattern: /\b(?:great question|of course|certainly|i hope this helps|let me know if you(?:'|')d like|here is an?|let'?s dive in|let'?s explore)\b[.!?\s]*/gi,
     replacement: ""
   },
   {
@@ -70,14 +70,14 @@ const RULES: Rule[] = [
     label: "Переписано академічні заготовки",
     detail: "Службові формули курсової замінено на коротші конструкції без шаблонного вступу.",
     pattern:
-      /(?:метою\s+(?:роботи|дослідження)\s+є|завданнями\s+(?:роботи|дослідження)\s+є|актуальність\s+(?:обраної\s+)?теми\s+(?:полягає|зумовлена)\s+(?:у\s+тому,?\s*що|тим,?\s*що|у)|предметом\s+дослідження\s+є|об['’]єктом\s+дослідження\s+є|робота\s+складається\s+з)/giu,
+      /(?:метою\s+(?:роботи|дослідження)\s+є|завданнями\s+(?:роботи|дослідження)\s+є|актуальність\s+(?:обраної\s+)?теми\s+(?:полягає|зумовлена)\s+(?:у\s+тому,?\s*що|тим,?\s*що|у)|предметом\s+дослідження\s+є|об['']єктом\s+дослідження\s+є|робота\s+складається\s+з)/giu,
     replacement: (match) => {
       const lower = match.toLowerCase();
       if (lower.startsWith("метою")) return "Мета:";
       if (lower.startsWith("завданнями")) return "Завдання:";
       if (lower.startsWith("актуальність")) return "Тема актуальна через те, що";
       if (lower.startsWith("предметом")) return "Предмет дослідження:";
-      if (lower.startsWith("об'єктом") || lower.startsWith("об’єктом")) return "Об'єкт дослідження:";
+      if (lower.startsWith("об'єктом") || lower.startsWith("об'єктом")) return "Об'єкт дослідження:";
       return "Структура роботи:";
     }
   },
@@ -122,9 +122,13 @@ const RULES: Rule[] = [
   },
   {
     label: "Зменшено негативний паралелізм",
-    detail: "Переписано характерні конструкції 'не лише..., а й...' у простішу форму.",
-    pattern: /не\s+(?:лише|тільки)\s+([^,.]{3,90}?),\s*а\s+й\s+/giu,
-    replacement: "$1 і "
+    detail: "Переписано характерні конструкції 'не лише..., а й...' у простішу форму без втрати другої частини.",
+    pattern: /не\s+(?:лише|тільки)\s+([^,.]{3,90}?),\s*а\s+(?:й|також)\s+([^,.]{3,90}?)(?=[.!?;,])/giu,
+    replacement: (_match, first: string, second: string) => {
+      const a = first.trim();
+      const b = second.trim();
+      return `${a}, а також ${b}`;
+    }
   },
   {
     label: "Прибрано зайве форматування",
@@ -155,8 +159,7 @@ function applyRule(text: string, rule: Rule): { text: string; count: number } {
   let count = 0;
   const revised = text.replace(rule.pattern, (...args) => {
     count += 1;
-    const match = String(args[0]);
-    if (typeof rule.replacement === "function") return rule.replacement(match);
+    if (typeof rule.replacement === "function") return (rule.replacement as any)(...args);
 
     return rule.replacement.replace(/\$(\d+)/g, (_token, index: string) => String(args[Number(index)] ?? ""));
   });
