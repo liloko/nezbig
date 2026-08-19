@@ -5,14 +5,67 @@
   <title>Сторінку не знайдено — Незбіг</title>
   <meta http-equiv="refresh" content="3;url=/">
   <style>
-    body { font-family: system-ui; text-align: center; padding: 4rem; color: #111817; background: #fbf7ed; }
-    h1 { font-size: 4rem; margin: 0; }
-    a { color: #2ec4b6; }
+
+
+
+    body {
+      font-family: 'Arial', sans-serif;
+      text-align: center;
+      padding: 2rem;
+      color: #111817;
+      background: linear-gradient(120deg, #f9f9f9, #f1f1f1);
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      height: 100vh;
+      margin: 0;
+    }
+    h1 {
+      font-size: 3.5rem;
+      margin-bottom: 2rem;
+      color: #2ec4b6;
+    }
+    .container {
+      max-width: 500px;
+      text-align: left;
+      padding: 2rem;
+      border-radius: 10px;
+      box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
+      background: #fff;
+    }
+    .logo {
+      width: 150px;
+      height: 150px;
+      margin-bottom: 2rem;
+    }
+    .message {
+      font-size: 1.2rem;
+    }
+    a {
+      color: #2ec4b6;
+      font-size: 1.2rem;
+      margin-top: 1rem;
+      text-decoration: none;
+    }
+    @media (max-width: 768px) {
+      h1 {
+        font-size: 3rem;
+      }
+      .container {
+        padding: 1.5rem;
+      }
+    }
   </style>
 </head>
 <body>
-  <h1>404</h1>
-  <p>Сторінку не знайдено. Перенаправляємо на головну…</p>
-  <p><a href="/">Перейти зараз</a></p>
+
+
+
+  <div class="container">
+    <img src="path/to/logo.png" alt="Logo" class="logo">
+    <h1>404</h1>
+    <p class="message">Сторінку не знайдено. Перенаправляємо на головну…</p>
+    <p><a href="/">Перейти зараз</a></p>
+  </div>
 </body>
 </html>

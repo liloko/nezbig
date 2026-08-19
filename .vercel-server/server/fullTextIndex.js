@@ -19,13 +19,27 @@ export class FullTextIndex {
             if (!positions?.length)
                 continue;
             hits += 1;
-            const firstPosition = positions[0];
+            // Find the position closest to lastPosition for better proximity scoring
+            let bestPosition = positions[0];
+            if (lastPosition !== undefined && positions.length > 1) {
+                let minDistance = Math.abs(bestPosition - lastPosition);
+                for (let i = 1; i < positions.length; i++) {
+                    const distance = Math.abs(positions[i] - lastPosition);
+                    if (distance < minDistance) {
+                        minDistance = distance;
+                        bestPosition = positions[i];
+                    }
+                    // Early exit if positions are sorted and we passed the optimal point
+                    if (positions[i] > lastPosition && distance > minDistance)
+                        break;
+                }
+            }
             if (lastPosition !== undefined) {
-                const distance = Math.abs(firstPosition - lastPosition);
+                const distance = Math.abs(bestPosition - lastPosition);
                 if (distance <= 18)
                     proximityBonus += 1;
             }
-            lastPosition = firstPosition;
+            lastPosition = bestPosition;
         }
         return Math.min(1, hits / uniqueQuery.length + (proximityBonus / Math.max(1, uniqueQuery.length - 1)) * 0.22);
     }

@@ -1,3 +1,5 @@
+import { BrandLogo } from "./BrandLogo";
+
 interface LoadingPanelProps {
   busy: boolean;
   llmBusy: boolean;
@@ -9,7 +11,9 @@ interface LoadingPanelProps {
 export function LoadingPanel({ busy, llmBusy, estimatedSeconds, progress, onCancel }: LoadingPanelProps) {
   return (
     <section className="loading-panel" aria-live="polite" aria-label="Стан перевірки">
-      <div className="loader-orbit" aria-hidden="true" />
+      <div className="flex justify-center mb-6">
+        <BrandLogo spinning={true} className="w-20 h-20" />
+      </div>
       <div>
         <h2>{busy ? "Готуємо звіт" : "AI-думка аналізує текст"}</h2>
         <p className="loading-estimate">{busy ? `Орієнтовний час: ${estimatedSeconds}` : "AI-думка може відповідати довше за локальний звіт."}</p>

@@ -353,7 +353,7 @@ function analyzeSinglePass(text: string): { probability: number; signals: AiSign
     .slice(0, 3)
     .reduce((sum, score, _index, scores) => sum + score / Math.max(1, scores.length), 0);
   const evidenceFloor =
-    promptLeak >= 40 ? 45 : evidenceSignals.length >= 3 ? Math.max(22, strongAverage * 0.5) : weakEvidenceSignals.length >= 5 ? 12 : weakEvidenceSignals.length >= 2 ? 5 : 0;
+    promptLeak >= 40 ? 45 : evidenceSignals.length >= 3 ? Math.max(22, strongAverage * 0.5) : weakEvidenceSignals.length >= 5 ? 8 : weakEvidenceSignals.length >= 2 ? 3 : 0;
   const probability = clampScore(placeholderText ? Math.min(10, weightedRaw) : Math.max(rawProbability, corroboratedFloor, evidenceFloor));
 
   const signals: AiSignal[] = signalDrafts
@@ -479,7 +479,8 @@ function determineVerdict(
   if (language.code === "limited") return "uncertain";
   const minimum = windowScores.length ? Math.min(...windowScores) : probability;
   const strongest = windowScores.length ? Math.max(...windowScores) : probability;
-  if (strongest >= 35 && minimum <= 28 && strongest - minimum >= 28) return "mixed";
+  // Mixed verdict requires at least 2 windows to avoid false positives on short texts
+  if (windowScores.length >= 2 && strongest >= 35 && minimum <= 28 && strongest - minimum >= 28) return "mixed";
   if (probability >= 70) return "high";
   if (probability >= 45) return "elevated";
   if (reliability.level === "low" || probability >= 12 || segments.length > 0) return "uncertain";

@@ -42,13 +42,14 @@ export function useScan() {
         const formData = new FormData();
         formData.append("file", selectedFile);
         formData.append("settings", JSON.stringify(settings));
-        response = await fetch("/api/scan-file/jobs", { method: "POST", body: formData, signal });
+        response = await fetch("/api/scan-file/jobs", { method: "POST", body: formData, signal, credentials: "include" });
       } else {
         response = await fetch("/api/scan/jobs", {
           method: "POST",
           headers: { "content-type": "application/json" },
           body: JSON.stringify({ text, fileName, settings }),
-          signal
+          signal,
+          credentials: "include"
         });
       }
 

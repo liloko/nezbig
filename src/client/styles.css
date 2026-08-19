@@ -1,3 +1,7 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
 @font-face {
   font-family: "Actay";
   src: url("../../docs/brand/Actay-Regular.otf") format("opentype");
@@ -31,21 +35,21 @@
 }
 
 :root {
-  color-scheme: light;
+  color-scheme: dark;
   font-family: "Actay", "Segoe UI", sans-serif;
-  background: #ebe4d4;
+  background: #111817;
   color: #111817;
   font-synthesis: none;
   text-rendering: optimizeLegibility;
   -webkit-font-smoothing: antialiased;
-  --ink: #111817;
-  --graphite: #10201f;
-  --paper: #fbf7ed;
-  --field: #f6efe2;
+  --ink: #f0f4f4;
+  --graphite: #f0f4f4;
+  --paper: #0e1514;
+  --field: #1a2120;
   --muted: #53615f;
-  --line: rgba(17, 24, 23, 0.14);
+  --line: rgba(255, 255, 255, 0.1);
   --accent: #2ec4b6;
-  --accent-soft: #dff7f4;
+  --accent-soft: rgba(46, 196, 182, 0.15);
   --warn: #ffbe0b;
   --risk: #ff5d73;
   --safe: #27ae60;
@@ -63,33 +67,9 @@ html {
   scroll-behavior: smooth;
 }
 
-body {
-  position: relative;
-  margin: 0;
-  min-width: 320px;
-  min-height: 100vh;
-  overflow-x: hidden;
-  background:
-    linear-gradient(180deg, #0b1917 0 236px, transparent 236px),
-    linear-gradient(118deg, rgba(46, 196, 182, 0.18), transparent 28%),
-    linear-gradient(135deg, #e8dfcc, #f7f0df 56%, #ded8c9);
-  touch-action: manipulation;
-  -webkit-tap-highlight-color: rgba(46, 196, 182, 0.26);
-}
+body { margin: 0; min-height: 100vh; background: transparent; }
 
-body::before {
-  content: "";
-  position: fixed;
-  inset: 0;
-  z-index: -1;
-  pointer-events: none;
-  background:
-    linear-gradient(rgba(16, 32, 31, 0.035) 1px, transparent 1px) 0 0 / 42px 42px,
-    linear-gradient(90deg, rgba(16, 32, 31, 0.028) 1px, transparent 1px) 0 0 / 42px 42px,
-    linear-gradient(120deg, transparent 0 62%, rgba(255, 190, 11, 0.12) 62% 63%, transparent 63%);
-  mask-image: linear-gradient(180deg, transparent, #000 18%, #000 82%, transparent);
-  animation: drift-grid 16s var(--ease-out) infinite alternate;
-}
+
 
 button,
 input,
@@ -235,7 +215,7 @@ h3 {
 .match-card,
 .signal {
   border: 1px solid var(--line);
-  background: rgba(251, 247, 237, 0.9);
+  background: rgba(30, 36, 35, 0.9);
   box-shadow: var(--shadow);
   backdrop-filter: blur(10px);
 }
@@ -287,7 +267,7 @@ h3 {
 }
 
 .file-button,
-button {
+.primary-button {
   display: inline-flex;
   min-height: 44px;
   align-items: center;
@@ -306,7 +286,7 @@ button {
 }
 
 .file-button::after,
-button::after {
+.primary-button::after {
   content: "";
   position: absolute;
   inset: 0;
@@ -317,7 +297,7 @@ button::after {
 
 .file-button:hover,
 .file-button:focus-within,
-button:hover:not(:disabled) {
+.primary-button:hover:not(:disabled) {
   background: #43d7c9;
   box-shadow: 0 12px 30px rgba(46, 196, 182, 0.24);
   transform: translateY(-2px);
@@ -325,7 +305,7 @@ button:hover:not(:disabled) {
 
 .file-button:hover::after,
 .file-button:focus-within::after,
-button:hover:not(:disabled)::after {
+.primary-button:hover:not(:disabled)::after {
   transform: translateX(120%);
 }
 
@@ -354,7 +334,7 @@ textarea,
   border-radius: 6px;
   background:
     linear-gradient(rgba(16, 32, 31, 0.035) 1px, transparent 1px) 0 0 / 100% 34px,
-    #fffdf7;
+    #161f1e;
   color: var(--ink);
   line-height: 1.65;
   padding: 18px;
@@ -523,7 +503,7 @@ input[type="number"] {
   min-height: 42px;
   border: 1px solid var(--line);
   border-radius: 6px;
-  background: #fffdf7;
+  background: #161f1e;
   color: var(--ink);
   padding: 0.7rem 0.8rem;
 }
@@ -549,7 +529,7 @@ input[type="number"] {
   align-items: center;
   border: 1px solid var(--line);
   border-radius: 8px;
-  background: #fffdf7;
+  background: #161f1e;
   cursor: pointer;
   margin: 0;
   padding: 10px 12px;
@@ -654,7 +634,7 @@ button:disabled {
   margin-top: 18px;
   border: 1px solid rgba(46, 196, 182, 0.28);
   border-radius: 8px;
-  background: rgba(251, 247, 237, 0.92);
+  background: rgba(30, 36, 35, 0.92);
   box-shadow: var(--shadow);
   padding: 18px;
   animation: fade-up 420ms var(--ease-out) both;
@@ -735,7 +715,7 @@ button:disabled {
   margin-top: 24px;
   border: 1px solid var(--line);
   border-radius: 8px;
-  background: rgba(251, 247, 237, 0.92);
+  background: rgba(30, 36, 35, 0.92);
   box-shadow: var(--shadow);
   padding: clamp(16px, 3vw, 28px);
   animation: report-enter 700ms var(--ease-out) both;
@@ -821,7 +801,7 @@ time {
 .secondary-button {
   min-height: 42px;
   border: 1px solid rgba(46, 196, 182, 0.48);
-  background: #fffdf7;
+  background: #161f1e;
   color: var(--graphite);
   padding: 0.62rem 0.9rem;
 }
@@ -1054,7 +1034,7 @@ dt {
   gap: 10px;
   border: 1px solid rgba(245, 201, 117, 0.42);
   border-radius: 8px;
-  background: rgba(255, 253, 247, 0.74);
+  background: rgba(30, 36, 35, 0.74);
   padding: 14px;
   animation: fade-up 480ms var(--ease-out) both;
 }
@@ -1197,7 +1177,7 @@ dt {
 .match-card:hover,
 .signal:hover {
   border-color: rgba(46, 196, 182, 0.36);
-  background: rgba(255, 253, 247, 0.95);
+  background: rgba(30, 36, 35, 0.95);
   box-shadow: 0 22px 54px rgba(16, 32, 31, 0.14);
   transform: translateY(-3px);
 }
@@ -2167,6 +2147,49 @@ progress::-moz-progress-bar {
   animation: fadeIn 0.2s var(--ease-out);
 }
 
+.file-button,
+.primary-button {
+  display: inline-flex;
+  min-height: 44px;
+  align-items: center;
+  justify-content: center;
+  border: 0;
+  border-radius: 6px;
+  background: var(--accent);
+  color: #0e1514;
+  cursor: pointer;
+  font-weight: 800;
+  padding: 0.72rem 1rem;
+  position: relative;
+  overflow: hidden;
+  transition: background-color 190ms var(--ease-out), transform 190ms var(--ease-out), box-shadow 190ms var(--ease-out);
+  white-space: nowrap;
+}
+
+.file-button::after,
+.primary-button::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(110deg, transparent 0 34%, rgba(255, 255, 255, 0.42) 45%, transparent 58%);
+  transform: translateX(-120%);
+  transition: transform 520ms var(--ease-out);
+}
+
+.file-button:hover,
+.file-button:focus-within,
+.primary-button:hover:not(:disabled) {
+  background: #43d7c9;
+  box-shadow: 0 12px 30px rgba(46, 196, 182, 0.24);
+  transform: translateY(-2px);
+}
+
+.file-button:hover::after,
+.file-button:focus-within::after,
+.primary-button:hover:not(:disabled)::after {
+  transform: translateX(120%);
+}
+
 .modal-content {
   background: var(--paper);
   border-radius: 12px;
@@ -2231,3 +2254,75 @@ progress::-moz-progress-bar {
   color: var(--muted);
   animation: pulse 1.5s ease-in-out infinite;
 }
+
+/* Tailwind Custom */
+
+        body {
+            background-color: transparent;
+            color: theme('colors.on-background');
+            overflow-x: hidden;
+        }
+        
+        .glass-panel {
+            background: rgba(14, 21, 20, 0.85);
+            backdrop-filter: blur(16px);
+            -webkit-backdrop-filter: blur(16px);
+            border: 1px solid rgba(86, 219, 198, 0.15);
+            box-shadow: 0 4px 30px rgba(0, 0, 0, 0.5);
+        }
+
+        .custom-scrollbar::-webkit-scrollbar {
+            width: 8px;
+        }
+        .custom-scrollbar::-webkit-scrollbar-track {
+            background: transparent;
+        }
+        .custom-scrollbar::-webkit-scrollbar-thumb {
+            background: theme('colors.surface-variant');
+            border-radius: 4px;
+        }
+        .custom-scrollbar::-webkit-scrollbar-thumb:hover {
+            background: theme('colors.outline');
+        }
+
+        /* Custom Radio Button Styling */
+        input[type="radio"] {
+            -webkit-appearance: none;
+            appearance: none;
+            background-color: transparent;
+            margin: 0;
+            font: inherit;
+            color: currentColor;
+            width: 1.15em;
+            height: 1.15em;
+            border: 2px solid theme('colors.outline');
+            border-radius: 50%;
+            display: grid;
+            place-content: center;
+        }
+
+        input[type="radio"]::before {
+            content: "";
+            width: 0.65em;
+            height: 0.65em;
+            border-radius: 50%;
+            transform: scale(0);
+            transition: 120ms transform ease-in-out;
+            box-shadow: inset 1em 1em theme('colors.emerald-glow');
+            background-color: theme('colors.emerald-glow');
+        }
+
+        input[type="radio"]:checked::before {
+            transform: scale(1);
+        }
+
+        input[type="radio"]:focus {
+            outline: max(2px, 0.15em) solid theme('colors.primary-fixed-dim');
+            outline-offset: max(2px, 0.15em);
+        }
+    
+@keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
+.fade-in { animation: fadeIn 0.5s ease-out forwards; }
+
+
+.rich-editor * { color: inherit !important; background-color: transparent !important; }

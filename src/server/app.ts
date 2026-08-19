@@ -3,6 +3,7 @@ import crypto from "crypto";
 import helmet from "helmet";
 import cors from "cors";
 import express from "express";
+import cookieParser from "cookie-parser";
 import multer from "multer";
 import pino from "pino";
 import * as diff from "diff";
@@ -20,6 +21,8 @@ import { emptySearchDiagnostics, mergeSearchDiagnostics, searchDiagnosticsNotes 
 import { calculateConfirmedPlagiarismScore, scoreCandidate, detectAiSignals, summarizeReport, rerankCandidates } from "./scoring.js";
 import { decodeUploadFileName, extractTextFromUpload } from "./textExtraction.js";
 import { hydrateSearchCandidatesDetailed, searchWebCandidatesDetailed } from "./webSearch.js";
+import { authMiddleware, saveUserReport } from "./auth.js";
+import { authRouter } from "./authRoutes.js";
 import type { FileEvidence, HumanizeRequest, LlmOpinionRequest, PlagiarismMatch, ScanReport, ScanRequest, ScanSettings, SearchDiagnostics } from "../shared/types.js";
 
 export const app = express();
@@ -27,14 +30,15 @@ app.use(helmet({
   contentSecurityPolicy: {
     directives: {
       defaultSrc: ["'self'"],
-      scriptSrc: ["'self'", "'unsafe-inline'"],
-      styleSrc: ["'self'", "'unsafe-inline'", "https://fonts.googleapis.com"],
-      fontSrc: ["'self'", "https://fonts.gstatic.com"],
-      imgSrc: ["'self'", "data:", "blob:"],
-      connectSrc: ["'self'", "https://api.github.com"],
+      scriptSrc: ["'self'", "'unsafe-inline'", "'unsafe-eval'", "https:", "http:"],
+      styleSrc: ["'self'", "'unsafe-inline'", "https://fonts.googleapis.com", "https:"],
+      fontSrc: ["'self'", "https://fonts.gstatic.com", "https:", "data:"],
+      imgSrc: ["'self'", "data:", "blob:", "https:", "http:"],
+      connectSrc: ["'self'", "https:", "http:"],
+      frameSrc: ["'self'", "https:", "http:"],
       frameAncestors: ["'none'"],
       baseUri: ["'self'"],
-      formAction: ["'self'"],
+      formAction: ["'self'", "https://accounts.google.com"],
     },
   },
   crossOriginEmbedderPolicy: false,
@@ -46,10 +50,16 @@ const logger = pino({ level: process.env.LOG_LEVEL || "info" });
 app.use(
   cors({
     origin: process.env.CLIENT_URL ?? "http://localhost:5173",
-    methods: ["POST", "GET"]
+    methods: ["POST", "GET"],
+    credentials: true,
   })
 );
+app.use(cookieParser());
 app.use(express.json({ limit: "10mb" }));
+app.use(authMiddleware);
+
+// Auth routes
+app.use("/api/auth", authRouter);
 
 const scanLimiter = rateLimit({ windowMs: 60 * 1000, max: 10, message: { error: "Забагато запитів" } });
 const fileLimiter = rateLimit({ windowMs: 60 * 1000, max: 5, message: { error: "Забагато запитів з файлами" } });
@@ -140,11 +150,11 @@ type ChunkSearchResult = {
 async function runScan(request: ScanRequest, fileEvidence?: FileEvidence, onProgress?: (checked: number, total: number) => void): Promise<ScanReport> {
   const prepared = prepareDocumentText(request.text);
   const text = prepared.text;
-  if (text.length < 120) {
-    throw new Error("Додайте щонайменше 120 символів тексту для надійної перевірки.");
+  const wordCount = countWords(text);
+  if (wordCount < 25) {
+    throw new Error("Додайте щонайменше 25 слів тексту для надійної перевірки.");
   }
 
-  const wordCount = countWords(text);
   const settings = fullCoverageSettings(sanitizeSettings(request.settings), wordCount);
   const chunks = chunkText(text, settings.chunkWords, settings.overlapWords, settings.maxChunks);
   const longDocumentMode = wordCount > 2000 || chunks.length > 18;
@@ -158,9 +168,14 @@ async function runScan(request: ScanRequest, fileEvidence?: FileEvidence, onProg
         includeAcademic: settings.sensitivity === "deep" && !veryLongDocumentMode,
         queryLimit: veryLongDocumentMode ? 1 : longDocumentMode ? 2 : undefined
       });
-      const reranked = await rerankCandidates(chunk.text, search.candidates);
+      let candidates = search.candidates;
+      try {
+        candidates = await rerankCandidates(chunk.text, candidates);
+      } catch (rerankError) {
+        logger.warn({ err: rerankError }, "Semantic reranking failed; falling back to raw candidates");
+      }
       return {
-        matches: reranked.map((candidate): ChunkMatch => ({ chunkText: chunk.text, match: scoreCandidate(chunk.text, candidate, chunk.index) })),
+        matches: candidates.map((candidate): ChunkMatch => ({ chunkText: chunk.text, match: scoreCandidate(chunk.text, candidate, chunk.index) })),
         diagnostics: search.diagnostics
       };
     } catch (error) {
@@ -271,12 +286,14 @@ app.post("/api/scan/jobs", scanLimiter, async (request, response) => {
   try {
     const parsed = ScanRequestSchema.parse(request.body);
     const settings = sanitizeSettings(parsed.settings);
+    const userId = request.user?.id;
     
     const textHash = crypto.createHash("sha256").update(parsed.text).digest("hex");
     const reportKey = `${textHash}:${settings.sensitivity}`;
     const cached = await reportCache.get(reportKey);
     
     if (cached) {
+      if (userId) await saveUserReport(userId, cached.id);
       response.json({ jobId: cached.id, status: "completed", result: cached });
       return;
     }
@@ -286,6 +303,7 @@ app.post("/api/scan/jobs", scanLimiter, async (request, response) => {
     if (process.env.VERCEL === "1") {
       const report = await runScan(parsed as unknown as ScanRequest);
       await saveReport(report.id, report);
+      if (userId) await saveUserReport(userId, report.id);
       response.json({ jobId: jobId, status: "completed", result: report });
       return;
     }
@@ -301,6 +319,7 @@ app.post("/api/scan/jobs", scanLimiter, async (request, response) => {
         
         await saveReport(report.id, report);
         await reportCache.set(reportKey, report);
+        if (userId) await saveUserReport(userId, report.id);
         
         await scanJobCache.set(jobId, { id: jobId, status: "completed", result: report, createdAt: new Date().toISOString() }, 1000 * 60 * 30);
       } catch (error) {
@@ -400,12 +419,14 @@ app.post("/api/scan-file/jobs", fileLimiter, upload.single("file"), async (reque
     const rawSettings = typeof request.body.settings === "string" ? JSON.parse(request.body.settings) : request.body.settings;
     const settings = ScanSettingsSchema.parse(rawSettings) as ScanSettings;
     const parsed = { text: extracted.text, fileName: extracted.fileName, settings };
+    const userId = request.user?.id;
 
     const textHash = crypto.createHash("sha256").update(parsed.text).digest("hex");
     const reportKey = `${textHash}:${settings.sensitivity}`;
     const cached = await reportCache.get(reportKey);
     
     if (cached) {
+      if (userId) await saveUserReport(userId, cached.id);
       response.json({ jobId: cached.id, status: "completed", result: cached });
       return;
     }
@@ -415,6 +436,7 @@ app.post("/api/scan-file/jobs", fileLimiter, upload.single("file"), async (reque
     if (process.env.VERCEL === "1") {
       const report = await runScan(parsed, extracted.fileEvidence);
       await saveReport(report.id, report);
+      if (userId) await saveUserReport(userId, report.id);
       response.json({ jobId: jobId, status: "completed", result: report });
       return;
     }
@@ -430,6 +452,7 @@ app.post("/api/scan-file/jobs", fileLimiter, upload.single("file"), async (reque
         
         await saveReport(report.id, report);
         await reportCache.set(reportKey, report);
+        if (userId) await saveUserReport(userId, report.id);
         
         await scanJobCache.set(jobId, { id: jobId, status: "completed", result: report, createdAt: new Date().toISOString() }, 1000 * 60 * 30);
       } catch (error) {
@@ -448,8 +471,9 @@ app.post("/api/ai-opinion", scanLimiter, async (request, response) => {
   try {
     const body = LlmOpinionRequestSchema.parse(request.body);
     const text = prepareDocumentText(body.text).text;
-    if (text.length < 120) {
-      response.status(400).json({ error: "Додайте щонайменше 120 символів тексту для AI-думки." });
+    const wordCount = countWords(text);
+    if (wordCount < 25) {
+      response.status(400).json({ error: "Додайте щонайменше 25 слів тексту для AI-думки." });
       return;
     }
 
@@ -478,8 +502,9 @@ app.post("/api/ai-opinion-file", fileLimiter, upload.single("file"), async (requ
 
     const extracted = await extractTextFromUpload(request.file);
     const text = prepareDocumentText(extracted.text).text;
-    if (text.length < 120) {
-      response.status(400).json({ error: "Файл має містити щонайменше 120 символів тексту для AI-думки." });
+    const wordCount = countWords(text);
+    if (wordCount < 25) {
+      response.status(400).json({ error: "Файл має містити щонайменше 25 слів тексту для AI-думки." });
       return;
     }
 

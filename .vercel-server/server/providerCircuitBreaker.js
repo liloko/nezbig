@@ -31,4 +31,7 @@ export class ProviderCircuitBreaker {
             openUntil: consecutiveFailures >= this.failureThreshold ? this.now() + this.cooldownMs : 0
         });
     }
+    resetProvider(provider) {
+        this.states.delete(provider);
+    }
 }

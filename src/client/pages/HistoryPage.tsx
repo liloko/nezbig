@@ -1,0 +1,242 @@
+import { useState, useEffect, useRef } from "react";
+import { useAuth } from "../hooks/useAuth";
+import { AuthModal } from "../components/AuthModal";
+import { ReportView } from "../components/ReportView";
+import type { ScanReport } from "../../shared/types";
+
+interface HistoryItem {
+  id: string;
+  fileName: string;
+  checkedAt: string;
+  plagiarismScore: number;
+  wordCount?: number;
+  aiProbability?: number;
+}
+
+export default function HistoryPage() {
+  const { isLoggedIn, user } = useAuth();
+  const [items, setItems] = useState<HistoryItem[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [showAuth, setShowAuth] = useState(false);
+  const [selectedReport, setSelectedReport] = useState<ScanReport | null>(null);
+  const [loadingReport, setLoadingReport] = useState(false);
+  const reportRef = useRef<HTMLElement | null>(null);
+
+  useEffect(() => {
+    async function loadHistory() {
+      try {
+        let serverItems: HistoryItem[] = [];
+        if (isLoggedIn) {
+          try {
+            const res = await fetch("/api/auth/history", { credentials: "include" });
+            const data = await res.json();
+            if (Array.isArray(data)) serverItems = data;
+          } catch {
+            // ignore server error
+          }
+        }
+        
+        let localItems: HistoryItem[] = [];
+        try {
+          localItems = JSON.parse(localStorage.getItem("nezbig_local_history") || "[]");
+        } catch {}
+
+        // Merge unique by ID, maintaining newest first
+        const seen = new Set<string>();
+        const merged: HistoryItem[] = [];
+        for (const item of [...serverItems, ...localItems]) {
+          if (item?.id && !seen.has(item.id)) {
+            seen.add(item.id);
+            merged.push(item);
+          }
+        }
+        setItems(merged);
+      } catch {
+        setItems([]);
+      } finally {
+        setLoading(false);
+      }
+    }
+    void loadHistory();
+  }, [isLoggedIn]);
+
+  async function handleSelectReport(id: string) {
+    setLoadingReport(true);
+    try {
+      // 1. Try server fetch
+      const res = await fetch(`/api/history/${id}`, { credentials: "include" });
+      if (res.ok) {
+        const report = await res.json();
+        setSelectedReport(report);
+        window.scrollTo({ top: 0, behavior: "smooth" });
+        return;
+      }
+      
+      // 2. Fallback to localStorage
+      const localItems = JSON.parse(localStorage.getItem("nezbig_local_history") || "[]");
+      const found = localItems.find((i: any) => i.id === id);
+      if (found?.fullReport) {
+        setSelectedReport(found.fullReport);
+        window.scrollTo({ top: 0, behavior: "smooth" });
+        return;
+      }
+      throw new Error("Не вдалося знайти звіт");
+    } catch (e) {
+      alert("Не вдалося завантажити детальний звіт");
+    } finally {
+      setLoadingReport(false);
+    }
+  }
+
+  if (!isLoggedIn && items.length === 0) {
+    return (
+      <div className="max-w-container-max mx-auto px-gutter py-12 flex flex-col items-center gap-8 relative z-10 fade-in">
+        <span className="material-symbols-outlined text-7xl text-on-surface-variant/40">lock</span>
+        <h1 className="font-display-lg text-display-lg font-bold text-white text-center">Історія перевірок</h1>
+        <p className="text-body-lg text-on-surface-variant text-center max-w-md">
+          Увійдіть в акаунт, щоб бачити історію ваших перевірок. Усі звіти зберігаються автоматично.
+        </p>
+        <button
+          onClick={() => setShowAuth(true)}
+          className="px-8 py-3 bg-gradient-to-br from-emerald-glow to-primary-container text-on-primary rounded-xl font-medium shadow-[0_8px_32px_rgba(42,187,167,0.3)] hover:-translate-y-1 transition-all"
+        >
+          Увійти в акаунт
+        </button>
+        <AuthModal open={showAuth} onClose={() => setShowAuth(false)} />
+      </div>
+    );
+  }
+
+  if (loading) {
+    return (
+      <div className="max-w-container-max mx-auto px-gutter py-12 flex flex-col items-center gap-6 relative z-10 fade-in">
+        <h1 className="font-display-lg text-display-lg font-bold text-white">Історія перевірок</h1>
+        <div className="text-on-surface-variant">Завантаження...</div>
+      </div>
+    );
+  }
+
+  if (selectedReport) {
+    return (
+      <div className="max-w-container-max mx-auto px-gutter py-8 relative z-10 fade-in flex flex-col gap-6">
+        <button
+          onClick={() => setSelectedReport(null)}
+          className="self-start flex items-center gap-2 text-emerald-glow hover:text-emerald-glow/80 font-medium transition-colors"
+        >
+          <span className="material-symbols-outlined">arrow_back</span>
+          Назад до списку перевірок
+        </button>
+        <ReportView report={selectedReport} llmBusy={false} reportRef={reportRef} />
+      </div>
+    );
+  }
+
+  function handleDeleteItem(e: React.MouseEvent, id: string) {
+    e.stopPropagation();
+    const updated = items.filter((item) => item.id !== id);
+    setItems(updated);
+    try {
+      localStorage.setItem("nezbig_local_history", JSON.stringify(updated));
+    } catch {
+      // ignore
+    }
+  }
+
+  function handleClearAll() {
+    if (window.confirm("Ви дійсно бажаєте очистити всю локальну історію перевірок?")) {
+      setItems([]);
+      try {
+        localStorage.removeItem("nezbig_local_history");
+      } catch {
+        // ignore
+      }
+    }
+  }
+
+  return (
+    <div className="max-w-container-max mx-auto px-gutter py-8 md:py-12 flex flex-col gap-6 relative z-10 fade-in">
+      <div className="flex items-center justify-between">
+        <div>
+          <h1 className="font-headline-lg text-headline-lg font-bold text-white">Історія перевірок</h1>
+          <p className="text-label-sm text-on-surface-variant mt-1">
+            Зберігається локально у вашому браузері без навантаження на сервер
+          </p>
+        </div>
+        <div className="flex items-center gap-4">
+          <span className="text-label-sm text-on-surface-variant hidden sm:inline">
+            {items.length} {items.length === 1 ? "перевірка" : items.length < 5 ? "перевірки" : "перевірок"}
+          </span>
+          {items.length > 0 && (
+            <button
+              onClick={handleClearAll}
+              className="text-label-sm text-on-surface-variant hover:text-error transition-colors px-3 py-1.5 rounded-lg border border-white/10 hover:border-error/30"
+            >
+              Очистити все
+            </button>
+          )}
+        </div>
+      </div>
+
+      {loadingReport && (
+        <div className="text-emerald-glow text-center py-4">Завантаження детального звіту...</div>
+      )}
+
+      {items.length === 0 ? (
+        <div className="glass-panel rounded-xl p-12 border flex flex-col items-center gap-4">
+          <span className="material-symbols-outlined text-5xl text-on-surface-variant/40">description</span>
+          <p className="text-body-lg text-on-surface-variant text-center">
+            Ви ще не проводили перевірок. Перейдіть на <a href="/" className="text-emerald-glow hover:underline">головну</a> і запустіть першу!
+          </p>
+        </div>
+      ) : (
+        <div className="flex flex-col gap-3">
+          {items.map((item) => {
+            const date = new Date(item.checkedAt);
+            const scoreColor = item.plagiarismScore > 50 ? "text-error" : item.plagiarismScore > 20 ? "text-yellow-400" : "text-emerald-glow";
+            
+            return (
+              <div
+                key={item.id}
+                onClick={() => handleSelectReport(item.id)}
+                className="glass-panel rounded-xl p-5 border hover:border-emerald-glow/40 transition-all duration-300 cursor-pointer group text-left w-full flex items-center justify-between gap-4"
+              >
+                <div className="flex items-center gap-4 min-w-0">
+                  <span className="material-symbols-outlined text-emerald-glow/60 group-hover:text-emerald-glow transition-colors shrink-0">description</span>
+                  <div className="min-w-0">
+                    <p className="text-body-md text-white font-medium truncate">{item.fileName}</p>
+                    <p className="text-label-sm text-on-surface-variant mt-1">
+                      {date.toLocaleDateString("uk-UA", { day: "2-digit", month: "long", year: "numeric" })}
+                      {" · "}
+                      {date.toLocaleTimeString("uk-UA", { hour: "2-digit", minute: "2-digit" })}
+                      {item.wordCount ? ` · ${item.wordCount} слів` : ""}
+                    </p>
+                  </div>
+                </div>
+                <div className="flex items-center gap-4 sm:gap-6 shrink-0">
+                  <div className="text-right">
+                    <p className="text-label-sm text-on-surface-variant">Плагіат</p>
+                    <p className={`text-body-lg font-bold ${scoreColor}`}>{item.plagiarismScore}%</p>
+                  </div>
+                  {item.aiProbability !== undefined && (
+                    <div className="text-right hidden sm:block">
+                      <p className="text-label-sm text-on-surface-variant">AI</p>
+                      <p className="text-body-lg font-bold text-white">{item.aiProbability}%</p>
+                    </div>
+                  )}
+                  <button
+                    onClick={(e) => handleDeleteItem(e, item.id)}
+                    className="p-1.5 text-on-surface-variant/40 hover:text-error hover:bg-error/10 rounded-lg transition-all"
+                    title="Видалити з історії"
+                  >
+                    <span className="material-symbols-outlined text-[20px]">delete</span>
+                  </button>
+                  <span className="material-symbols-outlined text-on-surface-variant/40 group-hover:text-emerald-glow transition-colors">chevron_right</span>
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      )}
+    </div>
+  );
+}

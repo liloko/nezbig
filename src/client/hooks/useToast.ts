@@ -3,13 +3,13 @@ import { useState, useCallback } from "react";
 export interface ToastMessage {
   id: number;
   text: string;
-  type: "success" | "error";
+  type: "success" | "error" | "info";
 }
 
 export function useToast() {
   const [toasts, setToasts] = useState<ToastMessage[]>([]);
 
-  const show = useCallback((text: string, type: "success" | "error" = "success") => {
+  const show = useCallback((text: string, type: "success" | "error" | "info" = "success") => {
     const id = Date.now() + Math.random();
     setToasts((prev) => [...prev, { id, text, type }]);
     setTimeout(() => {

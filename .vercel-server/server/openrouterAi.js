@@ -2,7 +2,13 @@ import { normalizeWhitespace } from "./chunking.js";
 const OPENROUTER_URL = "https://openrouter.ai/api/v1/chat/completions";
 const MAX_ANALYSIS_CHARS = 6000;
 const OPENROUTER_TIMEOUT_MS = 24_000;
-const FALLBACK_MODELS = ["openrouter/owl-alpha", "nvidia/nemotron-3-super-120b-a12b:free", "openai/gpt-oss-120b:free", "deepseek/deepseek-v4-flash:free", "z-ai/glm-4.5-air:free"];
+const FALLBACK_MODELS = [
+    "deepseek/deepseek-chat:free",
+    "meta-llama/llama-3.3-70b-instruct:free",
+    "google/gemini-2.0-flash-lite-001:free",
+    "mistralai/mistral-small-3.1-24b-instruct:free",
+    "qwen/qwen2.5-72b-instruct:free"
+];
 function getOpenRouterConfig() {
     const apiKey = process.env.OPENROUTER_API_KEY?.trim();
     const primaryModel = process.env.OPENROUTER_MODEL?.trim();

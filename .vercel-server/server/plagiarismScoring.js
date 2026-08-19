@@ -29,7 +29,8 @@ function longestCommonRun(source, candidate) {
 }
 function sourceForCandidate(candidate) {
     const pageText = candidate.sourceText?.trim();
-    if (pageText && pageText.split(/\s+/).length >= 18)
+    // Require at least 30 words to consider page text reliable (was 18 — too low)
+    if (pageText && pageText.split(/\s+/).length >= 30)
         return pageText;
     return `${candidate.title} ${candidate.snippet}`;
 }
@@ -84,7 +85,8 @@ export function scoreCandidate(chunkText, candidate, chunkIndex) {
     const overlapPercent = sourceTokens.length === 0 ? 0 : overlapCount / sourceTokens.length;
     const threeGramOverlap = overlapRatio(buildNgrams(sourceTokens, 3), buildNgrams(candidateTokens, 3));
     const fiveGramOverlap = overlapRatio(buildNgrams(sourceRunTokens, 5), buildNgrams(candidateRunTokens, 5));
-    const hashOverlap = setOverlapPercent(winnowFingerprints(sourceRunTokens), winnowFingerprints(candidateRunTokens));
+    // Increased gramSize from 5→7 and windowSize from 4→5 for better specificity
+    const hashOverlap = setOverlapPercent(winnowFingerprints(sourceRunTokens, 7, 5), winnowFingerprints(candidateRunTokens, 7, 5));
     const fullTextRank = candidateIndex.rank(sourceTokens);
     const commonRun = longestCommonRun(sourceRunTokens, candidateRunTokens);
     const longestRun = commonRun.length;

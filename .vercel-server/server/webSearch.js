@@ -59,11 +59,17 @@ async function runProviderTask(task) {
         }
     });
 }
+function normalizeUrlForDedupe(url) {
+    return url
+        .replace(/^https?:\/\/(www\.)?/i, "")
+        .replace(/#.*$/, "")
+        .replace(/\/+$/, "");
+}
 function dedupeByUrl(candidates) {
     const seen = new Set();
     const deduped = [];
     for (const candidate of candidates) {
-        const key = candidate.url.replace(/#.*$/, "").replace(/\/$/, "");
+        const key = normalizeUrlForDedupe(candidate.url);
         if (seen.has(key))
             continue;
         seen.add(key);
@@ -85,7 +91,8 @@ function interleaveCandidates(groups) {
 function phraseScore(words) {
     const normalized = words.map((word) => word.toLowerCase().replace(/[^\p{L}\p{N}'-]/gu, "")).filter(Boolean);
     const uniqueRatio = new Set(normalized).size / Math.max(1, normalized.length);
-    const informative = normalized.filter((word) => word.length >= 7 || /\d/.test(word)).length;
+    // Lower length threshold for Cyrillic (5) vs Latin (7) since Ukrainian words are naturally longer
+    const informative = normalized.filter((word) => word.length >= (/[\u0400-\u04FF]/.test(word) ? 5 : 7) || /\d/.test(word)).length;
     const averageLength = normalized.reduce((sum, word) => sum + word.length, 0) / Math.max(1, normalized.length);
     return uniqueRatio * 10 + informative * 1.8 + averageLength;
 }
@@ -241,7 +248,34 @@ async function searchWikipedia(query, maxResults) {
     if (plainQuery.length < 10)
         return [];
     const lang = franc(plainQuery);
-    const prefix = lang === 'eng' ? 'en' : (lang === 'rus' ? 'ru' : 'uk');
+    const prefixMap = {
+        eng: 'en',
+        ukr: 'uk',
+        rus: 'ru',
+        deu: 'de',
+        fra: 'fr',
+        pol: 'pl',
+        spa: 'es',
+        ita: 'it',
+        nld: 'nl',
+        por: 'pt',
+        swe: 'sv',
+        ces: 'cs',
+        hun: 'hu',
+        ron: 'ro',
+        ell: 'el',
+        bul: 'bg',
+        srp: 'sr',
+        hrv: 'hr',
+        slv: 'sl',
+        lit: 'lt',
+        lav: 'lv',
+        est: 'et',
+        fin: 'fi',
+        nor: 'no',
+        dan: 'da',
+    };
+    const prefix = prefixMap[lang] ?? 'en';
     const url = new URL(`https://${prefix}.wikipedia.org/w/api.php`);
     url.searchParams.set("action", "query");
     url.searchParams.set("list", "search");
