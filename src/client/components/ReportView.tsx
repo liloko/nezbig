@@ -26,16 +26,26 @@ export function ReportView({ report, llmBusy, reportRef }: ReportViewProps) {
 
   return (
     <section ref={reportRef} className="report" aria-labelledby="report-title">
-      <div className="report-header">
-        <div>
-          <p className="eyebrow">Звіт Незбіг</p>
-          <h2 id="report-title">{report.fileName}</h2>
-          <p>{reportSummaryText(report)}</p>
+      <div className="flex flex-col lg:flex-row lg:items-start justify-between gap-6 pb-6 border-b border-white/10">
+        <div className="min-w-0 flex-1">
+          <p className="font-label-sm text-label-sm text-emerald-glow tracking-wider uppercase mb-1">Звіт Незбіг</p>
+          <h2 id="report-title" className="font-headline-lg text-headline-lg text-white font-bold break-all leading-tight">
+            {report.fileName}
+          </h2>
+          <p className="text-body-md text-on-surface-variant mt-2 leading-relaxed max-w-3xl">
+            {reportSummaryText(report)}
+          </p>
         </div>
-        <div className="report-actions">
-          <time dateTime={report.checkedAt}>{new Intl.DateTimeFormat("uk-UA", { dateStyle: "medium", timeStyle: "short" }).format(new Date(report.checkedAt))}</time>
-          <div style={{ display: "flex", gap: "8px", alignItems: "center" }}>
-            <button className="secondary-button" type="button" onClick={() => navigator.clipboard.writeText(window.location.origin + "/history/" + report.id)}>
+        <div className="flex flex-col lg:items-end gap-3 shrink-0">
+          <time className="text-label-sm text-on-surface-variant font-mono" dateTime={report.checkedAt}>
+            {new Intl.DateTimeFormat("uk-UA", { dateStyle: "medium", timeStyle: "short" }).format(new Date(report.checkedAt))}
+          </time>
+          <div className="flex flex-wrap items-center gap-2">
+            <button 
+              className="px-3.5 py-2 rounded-xl border border-emerald-glow/40 text-emerald-glow hover:bg-emerald-glow/10 text-body-md font-medium transition-all"
+              type="button" 
+              onClick={() => navigator.clipboard.writeText(window.location.origin + "/history/" + report.id)}
+            >
               Копіювати посилання
             </button>
             <ExportToolbar report={report} />

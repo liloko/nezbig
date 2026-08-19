@@ -99,17 +99,20 @@ export default function Home({ showToast }: { showToast: (msg: string, type?: "s
     }
   }
 
-  if (busy || llmBusy || report) {
+  if (busy || report) {
     return (
-      <div className="max-w-container-max mx-auto px-gutter py-margin-desktop md:py-margin-desktop relative z-10 fade-in flex flex-col gap-8">
-        {(busy || llmBusy) && (
+      <div className="max-w-container-max mx-auto px-gutter py-8 md:py-12 relative z-10 fade-in flex flex-col gap-8">
+        {busy && (
           <LoadingPanel busy={busy} llmBusy={llmBusy} progress={progress} estimatedSeconds={formatDuration(estimatedSeconds)} onCancel={cancel} />
         )}
         {report && (
           <Suspense fallback={<div className="loading-skeleton">Завантаження звіту…</div>}>
             <ReportView report={report} llmBusy={llmBusy} reportRef={reportRef} />
             <div className="flex justify-center mt-8">
-              <button onClick={() => { setReport(null); cancel(); }} className="bg-surface-variant hover:bg-surface-bright text-white px-8 py-3 rounded-xl border border-outline-variant hover:border-emerald-glow transition-all">
+              <button 
+                onClick={() => { setReport(null); cancel(); }} 
+                className="bg-surface-variant hover:bg-surface-bright text-white px-8 py-3 rounded-xl border border-outline-variant hover:border-emerald-glow transition-all font-medium"
+              >
                 Повернутись до редактора
               </button>
             </div>
@@ -135,13 +138,27 @@ export default function Home({ showToast }: { showToast: (msg: string, type?: "s
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 items-start">
         <div className="lg:col-span-8 flex flex-col min-h-[600px] h-[calc(100vh-240px)]">
           <div className="glass-panel rounded-xl flex flex-col h-full border hover:border-emerald-glow/40 transition-colors duration-300 overflow-hidden relative group">
-            <div className="flex justify-between items-center px-6 py-4 border-b border-white/10 bg-surface-container-high/60">
-              <h2 className="font-headline-sm text-headline-sm text-white font-medium">Вставте текст або завантажте файл</h2>
-              <div className="flex items-center gap-3">
-                <span className="font-label-sm text-label-sm text-on-surface-variant hidden sm:inline">.docx, .pdf {editor.selectedFile && `(${editor.selectedFile.name})`}</span>
-                <label className="bg-surface-variant/80 hover:bg-surface-bright text-white px-4 py-1.5 rounded-full font-label-sm text-label-sm border border-outline-variant hover:border-emerald-glow transition-all flex items-center gap-2 cursor-pointer">
+            <div className="flex justify-between items-center px-6 py-4 border-b border-white/10 bg-surface-container-high/60 gap-4">
+              <div className="flex flex-col min-w-0 pr-2">
+                <h2 className="font-headline-sm text-headline-sm text-white font-medium truncate">
+                  {editor.selectedFile ? (
+                    <span className="flex items-center gap-2 text-emerald-glow">
+                      <span className="material-symbols-outlined text-xl shrink-0">description</span>
+                      <span className="truncate max-w-[240px] sm:max-w-[380px]">{editor.selectedFile.name}</span>
+                    </span>
+                  ) : (
+                    "Вставте текст або завантажте файл"
+                  )}
+                </h2>
+                <span className="font-label-sm text-label-sm text-on-surface-variant mt-0.5">
+                  {editor.selectedFile ? "Файл завантажено та готовий до перевірки" : "Підтримуються формати .docx, .pdf"}
+                </span>
+              </div>
+
+              <div className="flex items-center gap-3 shrink-0">
+                <label className="bg-surface-variant/80 hover:bg-surface-bright text-white px-4 py-2 rounded-full font-label-sm text-label-sm border border-outline-variant hover:border-emerald-glow transition-all flex items-center gap-2 cursor-pointer">
                   <span className="material-symbols-outlined text-[18px]">upload_file</span>
-                  Вибрати файл
+                  {editor.selectedFile ? "Замінити файл" : "Вибрати файл"}
                   <input type="file" className="hidden" accept=".docx,.pdf" onChange={(e) => {
                     const file = e.target.files?.[0];
                     if (file) {
