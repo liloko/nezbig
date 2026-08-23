@@ -151,7 +151,7 @@ export default function Home({ showToast }: { showToast: (msg: string, type?: "s
           </div>
         )}
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 items-start">
-        <div className="lg:col-span-8 flex flex-col min-h-[600px] h-[calc(100vh-240px)]">
+        <div className="lg:col-span-8 flex flex-col min-h-[600px] h-[calc(100vh-240px)] rise-in d-1">
           <div className="glass-panel rounded-xl flex flex-col h-full border hover:border-emerald-glow/40 transition-colors duration-300 overflow-hidden relative group">
             <div className="flex justify-between items-center px-6 py-4 border-b border-white/10 bg-surface-container-high/60 gap-4">
               <div className="flex flex-col min-w-0 pr-2">
@@ -171,7 +171,7 @@ export default function Home({ showToast }: { showToast: (msg: string, type?: "s
               </div>
 
               <div className="flex items-center gap-3 shrink-0">
-                <label className="bg-surface-variant/80 hover:bg-surface-bright text-white px-4 py-2 rounded-full font-label-sm text-label-sm border border-outline-variant hover:border-emerald-glow transition-all flex items-center gap-2 cursor-pointer">
+                <label className="upload-chip bg-surface-variant/80 hover:bg-surface-bright text-white px-4 py-2 rounded-full font-label-sm text-label-sm border border-outline-variant hover:border-emerald-glow transition-all flex items-center gap-2 cursor-pointer">
                   <span className="material-symbols-outlined text-[18px]">upload_file</span>
                   {editor.selectedFile ? "Замінити файл" : "Вибрати файл"}
                   <input type="file" className="hidden" accept=".docx,.pdf" onChange={(e) => {
@@ -184,28 +184,36 @@ export default function Home({ showToast }: { showToast: (msg: string, type?: "s
                 </label>
               </div>
             </div>
-            <div className="flex-grow p-6 relative overflow-hidden flex flex-col">
-              <div 
+            <div className="editor-shell flex-grow p-6 relative overflow-hidden flex flex-col">
+              <div
                 ref={editor.editorRef}
-                className="w-full h-full bg-transparent !border-0 !outline-none !shadow-none focus:!outline-none focus:!ring-0 text-body-lg text-white placeholder:text-on-surface-variant/60 custom-scrollbar !p-0 overflow-y-auto [&_*]:!text-inherit [&_*]:!bg-transparent" 
+                className="w-full h-full bg-transparent !border-0 !outline-none !shadow-none focus:!outline-none focus:!ring-0 text-body-lg text-white placeholder:text-on-surface-variant/60 custom-scrollbar !p-0 overflow-y-auto [&_*]:!text-inherit [&_*]:!bg-transparent"
                 contentEditable
                 onPaste={editor.handleRichPaste}
                 onInput={() => editor.syncEditorFromDom(true)}
                 suppressContentEditableWarning
               />
               {!editor.text && (
-                <div className="absolute top-6 left-6 text-body-lg text-on-surface-variant/50 pointer-events-none select-none">
-                  Вставте текст з Word або скопіюйте сюди текст...
+                <div className="editor-empty pointer-events-none select-none" aria-hidden="true">
+                  <span className="editor-empty-icon">
+                    <svg width="30" height="30" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round">
+                      <rect x="8" y="2" width="8" height="4" rx="1" />
+                      <path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2" />
+                      <path d="M9 12h6M9 16h4" />
+                    </svg>
+                  </span>
+                  <p className="text-body-lg">Вставте текст з Word або скопіюйте сюди текст...</p>
+                  <span className="kbd-hint"><kbd>Ctrl</kbd> + <kbd>V</kbd></span>
                 </div>
               )}
             </div>
             <div className="px-6 py-3 border-t border-white/10 flex justify-between items-center bg-surface-container/60 shrink-0">
-              <span className="font-label-sm text-label-sm text-on-surface-variant">{wordCount} слів</span>
-              <button 
+              <span className="word-counter font-label-sm text-label-sm text-on-surface-variant">{wordCount} слів</span>
+              <button
                 type="button"
-                aria-label="Clear text" 
+                aria-label="Clear text"
                 title="Очистити поле"
-                className="p-1.5 rounded-lg text-on-surface-variant hover:text-error hover:bg-error/10 transition-all flex items-center justify-center cursor-pointer"
+                className="clear-button p-1.5 rounded-lg text-on-surface-variant hover:text-error hover:bg-error/10 transition-all flex items-center justify-center cursor-pointer"
                 onClick={() => {
                   editor.setEditorContent("", "");
                   editor.setSelectedFile(null);
@@ -218,27 +226,27 @@ export default function Home({ showToast }: { showToast: (msg: string, type?: "s
           </div>
         </div>
 
-        <div className="lg:col-span-4 flex flex-col gap-6 min-h-[600px] h-[calc(100vh-240px)]">
+        <div className="lg:col-span-4 flex flex-col gap-6 min-h-[600px] h-[calc(100vh-240px)] rise-in d-2">
           <div className="glass-panel rounded-xl p-8 flex flex-col border flex-grow overflow-y-auto custom-scrollbar">
-            <h3 className="font-headline-md text-headline-md text-white mb-4">Параметри</h3>
+            <h3 className="panel-eyebrow font-headline-md text-headline-md text-white mb-4">Параметри</h3>
             <div className="flex flex-col gap-4">
               <h4 className="font-body-lg text-body-lg text-white font-medium">Режим перевірки</h4>
               <div className="flex flex-col gap-4">
-                <label className="flex items-start gap-4 p-4 rounded-lg bg-surface-container-high/60 hover:bg-surface-bright/80 backdrop-blur-sm transition-colors cursor-pointer border border-transparent hover:border-white/20 has-[:checked]:border-emerald-glow/50 has-[:checked]:bg-emerald-glow/20">
+                <label className="mode-card flex items-start gap-4 p-4 rounded-lg bg-surface-container-high/60 hover:bg-surface-bright/80 backdrop-blur-sm transition-colors cursor-pointer border border-transparent hover:border-white/20 has-[:checked]:border-emerald-glow/50 has-[:checked]:bg-emerald-glow/20">
                   <input type="radio" name="check_mode" className="mt-1" checked={settings.sensitivity === "quick"} onChange={() => setSettings(s => ({...s, sensitivity: "quick"}))} />
                   <div className="flex flex-col">
                     <span className="font-body-md text-body-md text-white font-medium">Швидко</span>
                     <span className="font-label-sm text-label-sm text-on-surface-variant mt-1">Короткий огляд, менше запитів</span>
                   </div>
                 </label>
-                <label className="flex items-start gap-4 p-4 rounded-lg bg-surface-container-high/60 hover:bg-surface-bright/80 backdrop-blur-sm transition-colors cursor-pointer border border-transparent hover:border-white/20 has-[:checked]:border-emerald-glow/50 has-[:checked]:bg-emerald-glow/20">
+                <label className="mode-card flex items-start gap-4 p-4 rounded-lg bg-surface-container-high/60 hover:bg-surface-bright/80 backdrop-blur-sm transition-colors cursor-pointer border border-transparent hover:border-white/20 has-[:checked]:border-emerald-glow/50 has-[:checked]:bg-emerald-glow/20">
                   <input type="radio" name="check_mode" className="mt-1" checked={settings.sensitivity === "balanced"} onChange={() => setSettings(s => ({...s, sensitivity: "balanced"}))} />
                   <div className="flex flex-col">
                     <span className="font-body-md text-body-md text-white font-medium">Глибоко</span>
                     <span className="font-label-sm text-label-sm text-on-surface-variant mt-1">Детальний аналіз, вища точність</span>
                   </div>
                 </label>
-                <label className="flex items-start gap-4 p-4 rounded-lg bg-surface-container-high/60 hover:bg-surface-bright/80 backdrop-blur-sm transition-colors cursor-pointer border border-transparent hover:border-white/20 has-[:checked]:border-emerald-glow/50 has-[:checked]:bg-emerald-glow/20">
+                <label className="mode-card flex items-start gap-4 p-4 rounded-lg bg-surface-container-high/60 hover:bg-surface-bright/80 backdrop-blur-sm transition-colors cursor-pointer border border-transparent hover:border-white/20 has-[:checked]:border-emerald-glow/50 has-[:checked]:bg-emerald-glow/20">
                   <input type="radio" name="check_mode" className="mt-1" checked={settings.sensitivity === "deep"} onChange={() => setSettings(s => ({...s, sensitivity: "deep"}))} />
                   <div className="flex flex-col">
                     <span className="font-body-md text-body-md text-white font-medium">Експертно</span>
@@ -249,27 +257,27 @@ export default function Home({ showToast }: { showToast: (msg: string, type?: "s
             </div>
           </div>
 
-          <div className="glass-panel rounded-xl p-6 border border-emerald-glow/30 relative overflow-hidden shrink-0">
+          <div className="stats-strip glass-panel rounded-xl p-6 border border-emerald-glow/30 relative overflow-hidden shrink-0 rise-in d-3">
             <div className="absolute inset-0 bg-gradient-to-br from-emerald-glow/20 to-transparent pointer-events-none"></div>
             <div className="flex justify-between items-center relative z-10">
               <div className="flex flex-col">
                 <span className="font-label-sm text-label-sm text-on-surface-variant">Розмір фрагмента</span>
-                <span className="font-body-lg text-body-lg text-white font-medium mt-1">{settings.chunkWords} слів</span>
+                <span className="stat-value font-body-lg text-body-lg text-white font-medium mt-1">{settings.chunkWords} слів</span>
               </div>
               <div className="flex flex-col text-center">
                 <span className="font-label-sm text-label-sm text-on-surface-variant">Орієнтовно</span>
-                <span className="font-body-lg text-body-lg text-white font-medium mt-1">~{formatDuration(estimatedSeconds)}</span>
+                <span className="stat-value font-body-lg text-body-lg text-white font-medium mt-1">~{formatDuration(estimatedSeconds)}</span>
               </div>
               <div className="flex flex-col text-right">
                 <span className="font-label-sm text-label-sm text-on-surface-variant">Перекриття</span>
-                <span className="font-body-lg text-body-lg text-white font-medium mt-1">{settings.overlapWords} слів</span>
+                <span className="stat-value font-body-lg text-body-lg text-white font-medium mt-1">{settings.overlapWords} слів</span>
               </div>
             </div>
           </div>
-          
-            <button onClick={handleSubmit} disabled={busy || !canScan} className="relative z-10 bg-gradient-to-br from-emerald-glow to-primary-container hover:from-primary hover:to-emerald-glow text-on-primary font-headline-md text-body-lg font-medium py-4 px-6 rounded-xl shadow-[0_8px_32px_rgba(42,187,167,0.3)] transition-all duration-300 transform hover:-translate-y-1 flex items-center justify-center gap-3 group disabled:opacity-50 disabled:hover:translate-y-0 w-full shrink-0">
-              <span>Запустити перевірку</span>
-              <span className="material-symbols-outlined text-3xl transition-transform group-hover:translate-x-1">arrow_forward</span>
+
+            <button onClick={handleSubmit} disabled={busy || !canScan} className="cta-main group relative z-10 bg-gradient-to-br from-emerald-glow to-primary-container hover:from-primary hover:to-emerald-glow text-on-primary font-headline-md text-body-lg font-medium py-4 px-6 rounded-xl transition-all duration-300 transform hover:-translate-y-1 flex items-center justify-center gap-3 disabled:opacity-50 disabled:hover:translate-y-0 w-full shrink-0 rise-in d-4">
+              <span className="relative z-10">Запустити перевірку</span>
+              <span className="relative z-10 material-symbols-outlined text-3xl transition-transform group-hover:translate-x-1">arrow_forward</span>
             </button>
           </div>
         </div>

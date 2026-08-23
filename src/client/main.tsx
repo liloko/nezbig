@@ -6,6 +6,7 @@ import { SpeedInsights } from "@vercel/speed-insights/react";
 import { ErrorBoundary } from "./components/ErrorBoundary";
 import App from "./App";
 import "./styles.css";
+import "./polish.css";
 
 createRoot(document.getElementById("root")!).render(
   <StrictMode>

@@ -54,32 +54,36 @@ export function Layout() {
 
   return (
     <div className="min-h-screen flex flex-col relative font-body-md text-body-md antialiased selection:bg-emerald-glow/30 dark bg-surface text-on-background">
+      {/* Atmosphere: aurora glows + blueprint grid + grain */}
+      <div className="bg-atmosphere" aria-hidden="true" />
+      <div className="bg-grain" aria-hidden="true" />
+
       {/* Top Navigation */}
-      <nav className="docked full-width top-0 bg-surface/80 backdrop-blur-xl border-b border-white/10 shadow-sm z-50 sticky">
+      <nav className="docked full-width top-0 bg-surface/80 backdrop-blur-xl border-b border-white/10 shadow-sm z-50 sticky nav-hairline">
         <div className="flex justify-between items-center w-full px-gutter py-4 max-w-container-max mx-auto">
           {/* Brand */}
           <div className="flex items-center gap-4">
-            <Link to="/" className="flex items-center gap-2 group">
-              <BrandLogo className="w-10 h-10 group-hover:scale-110 transition-transform" />
+            <Link to="/" className="brand-link flex items-center gap-2 group">
+              <BrandLogo className="w-10 h-10 group-hover:scale-110 group-hover:rotate-3 transition-transform duration-500" />
               <div className="flex flex-col">
-                <span className="text-headline-md font-headline-md font-bold tracking-tight text-white">НЕЗБІГ <span className="text-emerald-glow">2.0</span></span>
+                <span className="text-headline-md font-headline-md font-bold tracking-tight text-white">НЕЗБІГ <span className="brand-version text-emerald-glow">2.0</span></span>
                 <span className="font-label-sm text-label-sm text-on-surface-variant">Немає збігів. Є власний текст.</span>
               </div>
             </Link>
           </div>
           {/* Navigation Links */}
           <div className="hidden md:flex items-center gap-8">
-            <NavLink to="/" end className={({ isActive }) => isActive ? "text-emerald-glow border-b-2 border-emerald-glow pb-1 font-bold text-body-md hover:bg-white/5 transition-all duration-300" : "text-on-surface-variant hover:text-white transition-colors duration-300 text-body-md hover:bg-white/5 transition-all"}>Головна</NavLink>
-            <NavLink to="/humanize" className={({ isActive }) => isActive ? "text-emerald-glow border-b-2 border-emerald-glow pb-1 font-bold text-body-md hover:bg-white/5 transition-all duration-300" : "text-on-surface-variant hover:text-white transition-colors duration-300 text-body-md hover:bg-white/5 transition-all"}>Олюднення тексту</NavLink>
+            <NavLink to="/" end className={({ isActive }) => isActive ? "nav-link nav-link--active text-emerald-glow font-bold text-body-md transition-colors duration-300 hover:bg-white/5 rounded px-1" : "nav-link text-on-surface-variant hover:text-white transition-colors duration-300 text-body-md hover:bg-white/5 rounded px-1"}>Головна</NavLink>
+            <NavLink to="/humanize" className={({ isActive }) => isActive ? "nav-link nav-link--active text-emerald-glow font-bold text-body-md transition-colors duration-300 hover:bg-white/5 rounded px-1" : "nav-link text-on-surface-variant hover:text-white transition-colors duration-300 text-body-md hover:bg-white/5 rounded px-1"}>Олюднення тексту</NavLink>
           </div>
           {/* User Actions */}
           <div className="flex items-center gap-3 relative" data-user-menu>
             {isLoggedIn ? (
               <span className="text-body-md text-emerald-glow hidden sm:block truncate max-w-[120px] font-medium">{user?.name}</span>
             ) : (
-              <button 
-                onClick={() => setShowAuthModal(true)} 
-                className="px-4 py-1.5 rounded-full border border-emerald-glow/40 text-emerald-glow hover:bg-emerald-glow/10 font-medium text-body-md transition-all hidden sm:block"
+              <button
+                onClick={() => setShowAuthModal(true)}
+                className="signin-btn px-4 py-1.5 rounded-full border border-emerald-glow/40 text-emerald-glow hover:bg-emerald-glow/10 font-medium text-body-md transition-all hidden sm:block"
               >
                 Увійти
               </button>
