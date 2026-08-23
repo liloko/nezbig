@@ -360,4 +360,28 @@ describe("detectAiSignals", () => {
 
     expect(safeguard?.evidence?.join(" ")).toMatch(/авторської позиції/i);
   });
+
+  it("scores English passive voice as an impersonal-style signal", () => {
+    const text = Array.from(
+      { length: 10 },
+      () =>
+        "The data were collected during the field season. The measurements are recorded in the ledger. The samples were analyzed by two technicians, and the results are presented in the appendix."
+    ).join(" ");
+    const result = detectAiSignals(text);
+    const impersonal = result.signals.find((signal) => signal.label === "Безособовий стиль");
+
+    expect(impersonal).toBeDefined();
+    expect(impersonal?.score).toBeGreaterThanOrEqual(30);
+  });
+
+  it("does not dilute Ukrainian transition density with English-heavy mixed documents", () => {
+    const ukrainianPart = Array.from({ length: 6 }, () => "Отже, важливо підкреслити, що водночас система потребує додаткової перевірки на практиці.").join(" ");
+    const englishFiller = Array.from({ length: 40 }, (_, index) => `The field team visited site number ${index + 1} and wrote down the readings before lunch.`).join(" ");
+
+    const mixed = detectAiSignals(`${englishFiller} ${ukrainianPart}`);
+    const pureUkrainian = detectAiSignals(`${ukrainianPart} ${Array.from({ length: 40 }, (_, index) => `Польова група відвідала ділянку номер ${index + 1} і записала показники до обіду.`).join(" ")}`);
+
+    expect(mixed.signals.find((signal) => signal.label === "Часті формальні переходи")?.score ?? 0).toBeGreaterThan(0);
+    expect(pureUkrainian.probability).toBeGreaterThanOrEqual(mixed.probability - 12);
+  });
 });

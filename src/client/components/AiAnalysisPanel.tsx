@@ -7,9 +7,10 @@ interface AiAnalysisPanelProps {
   report: ScanReport;
   llmBusy: boolean;
   primarySignals: ScanReport["aiSignals"];
+  onRetryOpinion?: () => void;
 }
 
-export function AiAnalysisPanel({ report, llmBusy, primarySignals }: AiAnalysisPanelProps) {
+export function AiAnalysisPanel({ report, llmBusy, primarySignals, onRetryOpinion }: AiAnalysisPanelProps) {
   return (
     <section aria-labelledby="ai-title">
       <h3 id="ai-title">Розширений AI-аналіз</h3>
@@ -46,6 +47,16 @@ export function AiAnalysisPanel({ report, llmBusy, primarySignals }: AiAnalysisP
         ) : null}
       </div>
       {report.aiNote ? <p className="provider-note">{stripHtml(report.aiNote)}</p> : null}
+      {report.aiOpinionError && !llmBusy ? (
+        <p className="provider-note" role="status">
+          {stripHtml(report.aiOpinionError)}{" "}
+          {onRetryOpinion ? (
+            <button type="button" className="retry-opinion-button" onClick={onRetryOpinion}>
+              Повторити AI-думку
+            </button>
+          ) : null}
+        </p>
+      ) : null}
       {report.aiOpinionProbability !== undefined ? (
         <div className="opinion-panel">
           <strong>AI-думка: {report.aiOpinionProbability}%</strong>
@@ -55,7 +66,7 @@ export function AiAnalysisPanel({ report, llmBusy, primarySignals }: AiAnalysisP
       ) : null}
       <p className="section-note">
         Локальний ансамбль перевіряє авторський текст повністю й окремими сегментами. Відсоток є евристичним індикатором ризику, а не каліброваною ймовірністю чи доказом
-        авторства.
+        авторства. Смуга «±N п.п.» показує орієнтовну невизначеність: вона ширша для коротких текстів, слабкої надійності та великого розкиду між сегментами.
       </p>
       <div className="signal-list">
         {primarySignals.map((signal) => (

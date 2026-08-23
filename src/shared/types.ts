@@ -23,6 +23,8 @@ export type LlmOpinionRequest = {
   text: string;
   localProbability: number;
   localSignals: AiSignal[];
+  suspiciousExcerpts?: string[];
+  reportId?: string;
 };
 
 export type HumanizeRequest = {
@@ -162,6 +164,7 @@ export type ScanReport = {
   aiOpinionModel?: string;
   aiOpinionNote?: string;
   aiOpinionSignals?: AiSignal[];
+  aiOpinionError?: string;
   scanNotes?: string[];
   searchDiagnostics?: SearchDiagnostics;
   skippedTitleWords?: number;

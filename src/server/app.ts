@@ -23,9 +23,26 @@ import { decodeUploadFileName, extractTextFromUpload } from "./textExtraction.js
 import { hydrateSearchCandidatesDetailed, searchWebCandidatesDetailed } from "./webSearch.js";
 import { authMiddleware, saveUserReport } from "./auth.js";
 import { authRouter } from "./authRoutes.js";
-import type { FileEvidence, HumanizeRequest, LlmOpinionRequest, PlagiarismMatch, ScanReport, ScanRequest, ScanSettings, SearchDiagnostics } from "../shared/types.js";
+import type { FileEvidence, HumanizeRequest, LlmOpinionRequest, LlmOpinion, PlagiarismMatch, ScanReport, ScanRequest, ScanSettings, SearchDiagnostics } from "../shared/types.js";
 
 export const app = express();
+
+async function persistLlmOpinion(reportId: string | undefined, opinion: LlmOpinion): Promise<void> {
+  if (!reportId) return;
+  try {
+    const stored = await getReport(reportId);
+    if (!stored || stored.aiOpinionProbability !== undefined) return;
+    await saveReport(reportId, {
+      ...stored,
+      aiOpinionProbability: opinion.aiProbability,
+      aiOpinionModel: opinion.aiModel,
+      aiOpinionNote: opinion.aiNote,
+      aiOpinionSignals: opinion.aiSignals
+    });
+  } catch (error) {
+    logger.warn(error);
+  }
+}
 app.use(helmet({
   contentSecurityPolicy: {
     directives: {
@@ -479,7 +496,8 @@ app.post("/api/ai-opinion", scanLimiter, async (request, response) => {
 
     const opinion = await analyzeWithLlmProviders(text, {
       probability: Number(body.localProbability) || 0,
-      signals: Array.isArray(body.localSignals) ? body.localSignals : []
+      signals: Array.isArray(body.localSignals) ? body.localSignals : [],
+      suspiciousExcerpts: Array.isArray(body.suspiciousExcerpts) ? body.suspiciousExcerpts : []
     });
 
     if (!opinion) {
@@ -487,6 +505,7 @@ app.post("/api/ai-opinion", scanLimiter, async (request, response) => {
       return;
     }
 
+    await persistLlmOpinion(body.reportId, opinion);
     response.json(opinion);
   } catch (error) {
     response.status(502).json({ error: error instanceof Error ? error.message : "AI-думка недоступна." });
@@ -509,9 +528,12 @@ app.post("/api/ai-opinion-file", fileLimiter, upload.single("file"), async (requ
     }
 
     const localSignals = typeof request.body.localSignals === "string" ? JSON.parse(request.body.localSignals) : [];
+    const rawExcerpts = typeof request.body.suspiciousExcerpts === "string" ? JSON.parse(request.body.suspiciousExcerpts) : [];
+    const reportId = typeof request.body.reportId === "string" && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(request.body.reportId) ? request.body.reportId : undefined;
     const opinion = await analyzeWithLlmProviders(text, {
       probability: Number(request.body.localProbability) || 0,
-      signals: Array.isArray(localSignals) ? localSignals : []
+      signals: Array.isArray(localSignals) ? localSignals : [],
+      suspiciousExcerpts: Array.isArray(rawExcerpts) ? rawExcerpts.filter((item): item is string => typeof item === "string").slice(0, 8) : []
     });
 
     if (!opinion) {
@@ -519,6 +541,7 @@ app.post("/api/ai-opinion-file", fileLimiter, upload.single("file"), async (requ
       return;
     }
 
+    await persistLlmOpinion(reportId, opinion);
     response.json(opinion);
   } catch (error) {
     response.status(502).json({ error: error instanceof Error ? error.message : "AI-думка для файлу недоступна." });

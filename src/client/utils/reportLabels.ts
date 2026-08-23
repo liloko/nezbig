@@ -36,6 +36,14 @@ export function aiMetricCaption(report: ScanReport): string {
   return `${aiVerdictLabel(report.aiVerdict)} · надійність ${report.aiReliability.score}/100`;
 }
 
+export function uncertaintyBand(report: ScanReport): number {
+  const base = (100 - report.aiReliability.score) * 0.25;
+  const spreadBonus = Math.min(15, report.aiReliability.segmentSpread * 0.15);
+  const shortTextPenalty = report.wordCount < 240 ? 8 : 0;
+  const band = base + spreadBonus + shortTextPenalty;
+  return Math.max(4, Math.min(35, Math.round(band)));
+}
+
 export function reportSummaryText(report: ScanReport): string {
   if (report.aiOpinionProbability === undefined) return report.summary;
   return `${report.summary} AI-думка показана окремо: ${report.aiOpinionProbability}%.`;

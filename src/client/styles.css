@@ -851,6 +851,14 @@ dt {
   color: transparent;
 }
 
+.metrics .uncertainty-band {
+  display: block;
+  font-size: 0.8rem;
+  font-weight: 500;
+  letter-spacing: 0.02em;
+  margin-top: 2px;
+}
+
 .scan-notes {
   display: flex;
   flex-wrap: wrap;
@@ -958,6 +966,24 @@ dt {
   margin: 0 0 12px;
   overflow-wrap: anywhere;
   padding-left: 12px;
+}
+
+.retry-opinion-button {
+  background: none;
+  border: 1px solid var(--accent-strong);
+  border-radius: 8px;
+  color: var(--accent-strong);
+  cursor: pointer;
+  display: inline-block;
+  font: inherit;
+  margin-left: 6px;
+  padding: 2px 10px;
+  transition: background-color 0.2s ease, color 0.2s ease;
+}
+
+.retry-opinion-button:hover {
+  background: rgba(42, 187, 167, 0.12);
+  color: var(--ink);
 }
 
 .reliability-line {

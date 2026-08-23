@@ -1,5 +1,6 @@
 import { useState, useCallback } from "react";
 import type { ScanReport, LlmOpinion } from "../../shared/types";
+import { summarizeAiError } from "../utils/reportLabels";
 
 export function useAiOpinion(setReport: React.Dispatch<React.SetStateAction<ScanReport | null>>) {
   const [llmBusy, setLlmBusy] = useState(false);
@@ -12,11 +13,14 @@ export function useAiOpinion(setReport: React.Dispatch<React.SetStateAction<Scan
     setLlmBusy(true);
     try {
       let response: Response;
+      const suspiciousExcerpts = (baseReport.aiSuspiciousSegments ?? []).slice(0, 5).map((segment) => segment.excerpt);
       if (sourceFile) {
         const formData = new FormData();
         formData.append("file", sourceFile);
+        formData.append("reportId", baseReport.id);
         formData.append("localProbability", String(baseReport.aiProbability));
         formData.append("localSignals", JSON.stringify(baseReport.aiSignals));
+        formData.append("suspiciousExcerpts", JSON.stringify(suspiciousExcerpts));
         response = await fetch("/api/ai-opinion-file", { method: "POST", body: formData });
       } else {
         response = await fetch("/api/ai-opinion", {
@@ -24,8 +28,10 @@ export function useAiOpinion(setReport: React.Dispatch<React.SetStateAction<Scan
           headers: { "content-type": "application/json" },
           body: JSON.stringify({
             text: sourceText,
+            reportId: baseReport.id,
             localProbability: baseReport.aiProbability,
-            localSignals: baseReport.aiSignals
+            localSignals: baseReport.aiSignals,
+            suspiciousExcerpts
           })
         });
       }
@@ -37,6 +43,7 @@ export function useAiOpinion(setReport: React.Dispatch<React.SetStateAction<Scan
         current?.id === baseReport.id
           ? {
               ...current,
+              aiOpinionError: undefined,
               aiOpinionProbability: payload.aiProbability,
               aiOpinionModel: payload.aiModel,
               aiOpinionNote: payload.aiNote,
@@ -46,16 +53,8 @@ export function useAiOpinion(setReport: React.Dispatch<React.SetStateAction<Scan
       );
       return payload;
     } catch (error) {
-      const errMessage = error instanceof Error ? error.message : String(error);
-      const summarizeAiError = (msg: string) => {
-        if (/rate-limited|rate.?limit|429/i.test(msg)) return "модель тимчасово обмежена лімітом запитів";
-        if (/insufficient_quota|out of credits|quota/i.test(msg)) return "у провайдера закінчилася квота";
-        if (/aborted|timeout/i.test(msg)) return "модель не відповіла вчасно";
-        if (/empty response/i.test(msg)) return "модель повернула порожню відповідь";
-        return msg.slice(0, 180);
-      };
-      const note = `AI-думка недоступна, залишено локальний звіт: ${summarizeAiError(errMessage)}.`;
-      setReport((current) => (current?.id === baseReport.id ? { ...current, aiNote: note } : current));
+      const note = `AI-думка недоступна, залишено локальний звіт: ${summarizeAiError(error)}.`;
+      setReport((current) => (current?.id === baseReport.id ? { ...current, aiOpinionError: note } : current));
       throw error;
     } finally {
       setLlmBusy(false);

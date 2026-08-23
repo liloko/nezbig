@@ -1,11 +1,7 @@
 import { analyzeWithNvidiaNim } from "./nvidiaNimAi.js";
 import { analyzeWithOpenRouter } from "./openrouterAi.js";
-import type { AiSignal, LlmOpinion } from "../shared/types.js";
-
-type LocalAiResult = {
-  probability: number;
-  signals: AiSignal[];
-};
+import type { LocalAiResult } from "./llmShared.js";
+import type { LlmOpinion } from "../shared/types.js";
 
 export async function analyzeWithLlmProviders(text: string, localAi: LocalAiResult): Promise<LlmOpinion | null> {
   const errors: string[] = [];

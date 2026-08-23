@@ -6,6 +6,7 @@ import { useDraft } from "../hooks/useDraft";
 import { useFaviconProgress } from "../hooks/useFaviconProgress";
 import { useDocumentEditor } from "../hooks/useDocumentEditor";
 import { recommendSettings, estimateScanSeconds, formatDuration, defaultSettings } from "../utils/scanSettings";
+import type { ScanReport } from "../../shared/types";
 import { LoadingPanel } from "../components/LoadingPanel";
 
 import { AdsterraBanner } from "../components/AdsterraBanner";
@@ -19,6 +20,7 @@ export default function Home({ showToast }: { showToast: (msg: string, type?: "s
   const editor = useDocumentEditor((msg) => showToast(msg, "info"));
   const { report, setReport, busy, progress, scan, cancel } = useScan();
   const { llmBusy, loadLlmOpinion } = useAiOpinion(setReport);
+  const [lastScanInput, setLastScanInput] = useState<{ text: string; file: File | null } | null>(null);
   const mainRef = useRef<HTMLDivElement>(null);
 
   const isDragging = useDragDrop(mainRef, (file) => {
@@ -68,6 +70,12 @@ export default function Home({ showToast }: { showToast: (msg: string, type?: "s
     });
   }, [report]);
 
+  function requestAiOpinion(target: ScanReport, input: { text: string; file: File | null }) {
+    loadLlmOpinion(target, input.text, input.file).catch(() => {
+      showToast("AI-думка зараз недоступна — можна спробувати ще раз у звіті.", "error");
+    });
+  }
+
   async function handleSubmit() {
     if (!canScan) {
       showToast("Додайте файл або щонайменше 120 символів тексту.", "error");
@@ -87,9 +95,11 @@ export default function Home({ showToast }: { showToast: (msg: string, type?: "s
     const scanSettings = recommendSettings(wordCount, settings.sensitivity);
     try {
       const result = await scan(editor.text, editor.fileName, editor.selectedFile, scanSettings);
+      const input = { text: editor.text, file: editor.selectedFile };
+      setLastScanInput(input);
       clearDraft();
       showToast("Базовий звіт готовий.", "success");
-      void loadLlmOpinion(result, editor.text, editor.selectedFile);
+      requestAiOpinion(result, input);
     } catch (error) {
       if (error instanceof Error && error.name === "AbortError") {
         showToast("Перевірку скасовано.", "error");
@@ -107,7 +117,12 @@ export default function Home({ showToast }: { showToast: (msg: string, type?: "s
         )}
         {report && (
           <Suspense fallback={<div className="loading-skeleton">Завантаження звіту…</div>}>
-            <ReportView report={report} llmBusy={llmBusy} reportRef={reportRef} />
+            <ReportView
+              report={report}
+              llmBusy={llmBusy}
+              reportRef={reportRef}
+              onRetryOpinion={lastScanInput ? () => requestAiOpinion(report, lastScanInput) : undefined}
+            />
             <div className="flex justify-center mt-8">
               <button 
                 onClick={() => { setReport(null); cancel(); }} 

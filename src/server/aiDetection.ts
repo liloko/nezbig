@@ -24,28 +24,42 @@ export const AI_SCORING_WEIGHTS = {
   structure: 0.2
 };
 
-const TRANSITIONS = new Set([
-  "therefore",
-  "however",
-  "moreover",
-  "furthermore",
-  "additionally",
-  "consequently",
-  "overall",
-  "важливо",
-  "отже",
-  "проте",
-  "однак",
-  "таким",
-  "загалом",
-  "водночас",
-  "натомість",
-  "по-перше",
-  "по-друге",
-  "насамкінець"
-]);
+export const AI_ENSEMBLE_WEIGHTS = {
+  document: 0.36,
+  median: 0.14,
+  upperQuartile: 0.2,
+  topAverage: 0.22,
+  suspiciousCoverage: 0.08,
+  localizedFloorFactor: 0.56,
+  localizedTopAverageFactor: 0.48
+};
 
-const HEDGES = new Set(["may", "might", "could", "typically", "often", "може", "ймовірно", "зазвичай", "часто", "можливо", "потенційно"]);
+export const AI_WINDOW_CONFIG = {
+  targetWords: 220,
+  overlapWords: 55
+};
+
+export const AI_VERDICT_THRESHOLDS = {
+  highProbability: 70,
+  elevatedProbability: 45,
+  mixedStrongest: 35,
+  mixedMinimum: 28,
+  mixedSpread: 28,
+  uncertainFloorProbability: 12,
+  insufficientWords: 80
+};
+
+const EN_TRANSITIONS = new Set(["therefore", "however", "moreover", "furthermore", "additionally", "consequently", "overall"]);
+
+const UA_TRANSITIONS = new Set(["важливо", "отже", "проте", "однак", "таким", "загалом", "водночас", "натомість", "по-перше", "по-друге", "насамкінець"]);
+
+const TRANSITIONS = new Set([...EN_TRANSITIONS, ...UA_TRANSITIONS]);
+
+const EN_HEDGES = new Set(["may", "might", "could", "typically", "often"]);
+
+const UA_HEDGES = new Set("може ймовірно зазвичай часто можливо потенційно".split(" "));
+
+const HEDGES = new Set([...EN_HEDGES, ...UA_HEDGES]);
 
 const AI_PATTERN_GROUPS = [
   {
@@ -145,6 +159,34 @@ function ngramRepetition(tokens: string[]): { score: number; evidence: string[] 
   return { score, evidence: repeated.map(([gram, count]) => `${gram} (${count}x)`).slice(0, 4) };
 }
 
+function languageWordShares(words: string[]): { cyrillicShare: number; latinShare: number } {
+  let cyrillic = 0;
+  let latin = 0;
+  for (const word of words) {
+    if (/[\p{Script=Cyrillic}]/u.test(word)) cyrillic += 1;
+    else if (/[\p{Script=Latin}]/u.test(word)) latin += 1;
+  }
+  const total = Math.max(1, words.length);
+  return { cyrillicShare: cyrillic / total, latinShare: latin / total };
+}
+
+function perLanguageDensity(counts: { cyrillic: number; latin: number }, words: string[], shares: { cyrillicShare: number; latinShare: number }): number {
+  const cyrillicWords = Math.max(1, words.length * shares.cyrillicShare);
+  const latinWords = Math.max(1, words.length * shares.latinShare);
+  const cyrDensity = counts.cyrillic / cyrillicWords;
+  const latDensity = counts.latin / latinWords;
+  return Math.max(cyrDensity, latDensity);
+}
+
+function englishPassiveVoice(text: string, latinWordCount: number): { score: number; evidence: string[] } {
+  const matches = countRegexMatches(text, /\b(?:is|are|was|were|be|been|being)\s+(?:\w+\s+)?\w+(?:ed|en)\b/gi);
+  const density = matches.length / Math.max(1, latinWordCount / 240);
+  return {
+    score: clampScore(Math.min(1, density / 2.6) * 100),
+    evidence: sampleEvidence(matches)
+  };
+}
+
 function impersonalAcademicVoice(text: string, wordCount: number): { score: number; evidence: string[] } {
   const matches = countRegexMatches(
     text,
@@ -221,14 +263,35 @@ function analyzeSinglePass(text: string): { probability: number; signals: AiSign
   const mattr = movingAverageTypeTokenRatio(words);
   const sentenceLengths = proseSentences.map((sentence) => tokenize(sentence, true).length).filter(Boolean);
   const sentenceCv = coefficientOfVariation(sentenceLengths);
-  const transitionDensity = words.filter((word) => TRANSITIONS.has(word)).length / Math.max(1, wordCount);
-  const hedgeDensity = words.filter((word) => HEDGES.has(word)).length / Math.max(1, wordCount);
+
+  const shares = languageWordShares(words);
+  const transitionCounts = { cyrillic: 0, latin: 0 };
+  const hedgeCounts = { cyrillic: 0, latin: 0 };
+  for (const word of words) {
+    if (!TRANSITIONS.has(word) && !HEDGES.has(word)) continue;
+    const isCyrillic = /[\p{Script=Cyrillic}]/u.test(word);
+    if (TRANSITIONS.has(word)) {
+      if (isCyrillic) transitionCounts.cyrillic += 1;
+      else transitionCounts.latin += 1;
+    }
+    if (HEDGES.has(word)) {
+      if (isCyrillic) hedgeCounts.cyrillic += 1;
+      else hedgeCounts.latin += 1;
+    }
+  }
+  const transitionDensity = perLanguageDensity(transitionCounts, words, shares);
+  const hedgeDensity = perLanguageDensity(hedgeCounts, words, shares);
 
   const placeholderText = looksLikePlaceholderText(normalized);
   const academicStructure = hasAcademicStructure(normalized);
   const repeatedStarts = sentenceStartRepetition(proseSentences);
   const repeatedNgrams = ngramRepetition(contentWords);
-  const impersonalVoice = impersonalAcademicVoice(normalized, wordCount);
+  const uaImpersonal = impersonalAcademicVoice(normalized, wordCount);
+  const enPassive = englishPassiveVoice(normalized, Math.max(1, Math.round(words.length * shares.latinShare)));
+  const impersonalVoice = {
+    score: Math.max(uaImpersonal.score, enPassive.score),
+    evidence: [...uaImpersonal.evidence, ...enPassive.evidence].slice(0, 4)
+  };
   const safeguards = safeguardScore(normalized, wordCount, placeholderText, academicStructure);
 
   const rhythmScore = clampScore((1 - Math.min(1, sentenceCv / 0.55)) * 100 * (proseSentences.length >= 4 ? 1 : 0.6));
@@ -380,7 +443,7 @@ type AnalysisWindow = {
   text: string;
 };
 
-function buildAnalysisWindows(text: string, targetWords = 220, overlapWords = 55): AnalysisWindow[] {
+function buildAnalysisWindows(text: string, targetWords = AI_WINDOW_CONFIG.targetWords, overlapWords = AI_WINDOW_CONFIG.overlapWords): AnalysisWindow[] {
   const words = normalizeWhitespace(text).split(/\s+/).filter(Boolean);
   if (words.length === 0) return [];
   if (words.length <= targetWords) {
@@ -475,15 +538,16 @@ function determineVerdict(
   windowScores: number[],
   segments: AiSuspiciousSegment[]
 ): AiVerdict {
-  if (wordCount < 80) return "insufficient";
+  const thresholds = AI_VERDICT_THRESHOLDS;
+  if (wordCount < thresholds.insufficientWords) return "insufficient";
   if (language.code === "limited") return "uncertain";
   const minimum = windowScores.length ? Math.min(...windowScores) : probability;
   const strongest = windowScores.length ? Math.max(...windowScores) : probability;
   // Mixed verdict requires at least 2 windows to avoid false positives on short texts
-  if (windowScores.length >= 2 && strongest >= 35 && minimum <= 28 && strongest - minimum >= 28) return "mixed";
-  if (probability >= 70) return "high";
-  if (probability >= 45) return "elevated";
-  if (reliability.level === "low" || probability >= 12 || segments.length > 0) return "uncertain";
+  if (windowScores.length >= 2 && strongest >= thresholds.mixedStrongest && minimum <= thresholds.mixedMinimum && strongest - minimum >= thresholds.mixedSpread) return "mixed";
+  if (probability >= thresholds.highProbability) return "high";
+  if (probability >= thresholds.elevatedProbability) return "elevated";
+  if (reliability.level === "low" || probability >= thresholds.uncertainFloorProbability || segments.length > 0) return "uncertain";
   return "low";
 }
 
@@ -523,13 +587,19 @@ export function detectAiSignals(rawText: string): AiDetectionResult {
   const median = percentile(windowScores, 0.5);
   const upperQuartile = percentile(windowScores, 0.75);
   const strongest = Math.max(...windowScores);
-  const suspiciousWindows = windowScores.filter((score) => score >= 35).length;
+  const suspiciousThreshold = AI_VERDICT_THRESHOLDS.mixedStrongest;
+  const suspiciousWindows = windowScores.filter((score) => score >= suspiciousThreshold).length;
   const suspiciousCoverage = suspiciousWindows / windowScores.length;
   const topScores = [...windowScores].sort((left, right) => right - left).slice(0, Math.min(3, windowScores.length));
   const topAverage = topScores.reduce((sum, score) => sum + score, 0) / Math.max(1, topScores.length);
 
-  const ensembleScore = documentResult.probability * 0.36 + median * 0.14 + upperQuartile * 0.2 + topAverage * 0.22 + suspiciousCoverage * 100 * 0.08;
-  const localizedFloor = strongest >= 35 ? strongest * 0.56 : topAverage >= 24 ? topAverage * 0.48 : 0;
+  const ensembleScore =
+    documentResult.probability * AI_ENSEMBLE_WEIGHTS.document +
+    median * AI_ENSEMBLE_WEIGHTS.median +
+    upperQuartile * AI_ENSEMBLE_WEIGHTS.upperQuartile +
+    topAverage * AI_ENSEMBLE_WEIGHTS.topAverage +
+    suspiciousCoverage * 100 * AI_ENSEMBLE_WEIGHTS.suspiciousCoverage;
+  const localizedFloor = strongest >= AI_VERDICT_THRESHOLDS.mixedStrongest ? strongest * AI_ENSEMBLE_WEIGHTS.localizedFloorFactor : topAverage >= 24 ? topAverage * AI_ENSEMBLE_WEIGHTS.localizedTopAverageFactor : 0;
   const probability = clampScore(Math.max(ensembleScore, localizedFloor));
 
   const segmentSignal: AiSignal = {

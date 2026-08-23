@@ -5,15 +5,16 @@ import { SuspiciousSegments } from "./SuspiciousSegments";
 import { PlagiarismMatches } from "./PlagiarismMatches";
 import { ProviderDiagnostics } from "./ProviderDiagnostics";
 import { SignalCard } from "./SignalCard";
-import { formatNumber, riskLabel, aiMetricCaption, reportSummaryText, aiVerdictLabel } from "../utils/reportLabels";
+import { formatNumber, riskLabel, aiMetricCaption, reportSummaryText, aiVerdictLabel, uncertaintyBand } from "../utils/reportLabels";
 
 interface ReportViewProps {
   report: ScanReport;
   llmBusy: boolean;
   reportRef: React.RefObject<HTMLElement | null>;
+  onRetryOpinion?: () => void;
 }
 
-export function ReportView({ report, llmBusy, reportRef }: ReportViewProps) {
+export function ReportView({ report, llmBusy, reportRef, onRetryOpinion }: ReportViewProps) {
   const confirmedMatchCount = report.matches.filter((match) => match.confidence === "page").length;
   const leadMatchCount = report.matches.length - confirmedMatchCount;
   const searchAttemptCount = report.searchDiagnostics?.providers.reduce((sum, provider) => sum + provider.attempted, 0) ?? 0;
@@ -61,7 +62,14 @@ export function ReportView({ report, llmBusy, reportRef }: ReportViewProps) {
         </article>
         <article>
           <span>ШІ-аналіз</span>
-          <strong>{report.aiVerdict === "insufficient" ? "—" : `${report.aiProbability}%`}</strong>
+          {report.aiVerdict === "insufficient" ? (
+            <strong>—</strong>
+          ) : (
+            <>
+              <strong>{report.aiProbability}%</strong>
+              <small className="uncertainty-band">±{uncertaintyBand(report)} п.п.</small>
+            </>
+          )}
           <small>{aiMetricCaption(report)}</small>
         </article>
         <article>
@@ -112,7 +120,7 @@ export function ReportView({ report, llmBusy, reportRef }: ReportViewProps) {
           ) : null}
         </div>
 
-        <AiAnalysisPanel report={report} llmBusy={llmBusy} primarySignals={primaryAiSignals} />
+        <AiAnalysisPanel report={report} llmBusy={llmBusy} primarySignals={primaryAiSignals} onRetryOpinion={onRetryOpinion} />
       </div>
     </section>
   );

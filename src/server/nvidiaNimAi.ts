@@ -1,10 +1,12 @@
-import { normalizeWhitespace } from "./chunking.js";
-import type { AiSignal, LlmOpinion } from "../shared/types.js";
-
-type LocalAiResult = {
-  probability: number;
-  signals: AiSignal[];
-};
+import type { LlmOpinion } from "../shared/types.js";
+import {
+  asScore,
+  buildAnalysisSample,
+  JSON_SHAPE_PROMPT,
+  parseAuthorshipResult,
+  withTimeout,
+  type LocalAiResult
+} from "./llmShared.js";
 
 type NvidiaResponse = {
   choices?: Array<{
@@ -19,7 +21,6 @@ type NvidiaResponse = {
 
 const NVIDIA_NIM_URL = "https://integrate.api.nvidia.com/v1/chat/completions";
 const NVIDIA_TIMEOUT_MS = 32_000;
-const MAX_ANALYSIS_CHARS = 6000;
 const DEFAULT_NIM_MODELS = ["nvidia/llama-3.1-nemotron-ultra-253b-v1", "meta/llama-3.3-70b-instruct", "meta/llama-3.1-70b-instruct"];
 
 function getNvidiaConfig(): { apiKey: string; models: string[] } | null {
@@ -35,33 +36,8 @@ function getNvidiaConfig(): { apiKey: string; models: string[] } | null {
   return { apiKey, models };
 }
 
-function withTimeout(ms: number): AbortSignal {
-  const controller = new AbortController();
-  setTimeout(() => controller.abort(), ms).unref();
-  return controller.signal;
-}
-
-function asScore(value: unknown): number {
-  const number = Number(value);
-  if (!Number.isFinite(number)) return 0;
-  return Math.max(0, Math.min(100, Math.round(number)));
-}
-
-function extractJsonObject(content: string): unknown {
-  const fenced = content.match(/```(?:json)?\s*([\s\S]*?)```/i);
-  const raw = fenced?.[1] ?? content;
-  const start = raw.indexOf("{");
-  const end = raw.lastIndexOf("}");
-
-  if (start === -1 || end === -1 || end <= start) {
-    throw new Error("NVIDIA NIM returned no JSON object.");
-  }
-
-  return JSON.parse(raw.slice(start, end + 1));
-}
-
 function buildMessages(text: string, localAi: LocalAiResult) {
-  const sample = normalizeWhitespace(text).slice(0, MAX_ANALYSIS_CHARS);
+  const sample = buildAnalysisSample(text, localAi.suspiciousExcerpts ?? []);
   return [
     {
       role: "system",
@@ -70,13 +46,7 @@ function buildMessages(text: string, localAi: LocalAiResult) {
     },
     {
       role: "user",
-      content: `Estimate whether the prose was written by an AI model. Return JSON only:
-{
-  "probability": 0-100,
-  "signals": [
-    { "label": "short Ukrainian label", "score": 0-100, "detail": "one sentence", "evidence": ["short evidence"] }
-  ]
-}
+      content: `Estimate whether the prose was written by an AI model. ${JSON_SHAPE_PROMPT}
 
 Local heuristic probability: ${localAi.probability}
 Local heuristic signals: ${JSON.stringify(localAi.signals.slice(0, 8))}
@@ -85,44 +55,6 @@ Text:
 ${sample}`
     }
   ];
-}
-
-function parseNimResult(content: string, model: string, attemptedModels: string[]): LlmOpinion {
-  const parsed = extractJsonObject(content) as {
-    probability?: unknown;
-    signals?: Array<{
-      label?: unknown;
-      score?: unknown;
-      detail?: unknown;
-      evidence?: unknown;
-    }>;
-  };
-  const probability = asScore(parsed.probability);
-  const signals = (Array.isArray(parsed.signals) ? parsed.signals : []).slice(0, 6).map((signal): AiSignal => ({
-    label: String(signal.label || "NVIDIA NIM AI Оцінка").slice(0, 80),
-    score: asScore(signal.score),
-    detail: String(signal.detail || "Модель NVIDIA NIM визначила це як релевантний авторський сигнал.").slice(0, 280),
-    category: "pattern",
-    evidence: Array.isArray(signal.evidence) ? signal.evidence.map((item) => String(item).slice(0, 140)).slice(0, 4) : []
-  }));
-
-  return {
-    aiProbability: probability,
-    aiProvider: "nvidia-nim",
-    aiModel: model,
-    aiNote: attemptedModels.length > 1 ? `NVIDIA NIM fallback: спрацювала ${model}; перед цим пробували ${attemptedModels.slice(0, -1).join(", ")}.` : undefined,
-    aiSignals:
-      signals.length > 0
-        ? signals
-        : [
-            {
-              label: "NVIDIA NIM AI Оцінка",
-              score: probability,
-              detail: "NVIDIA NIM повернула загальну оцінку без деталізованих сигналів.",
-              category: "pattern"
-            }
-          ]
-  };
 }
 
 export async function analyzeWithNvidiaNim(text: string, localAi: LocalAiResult): Promise<LlmOpinion | null> {
@@ -164,7 +96,16 @@ export async function analyzeWithNvidiaNim(text: string, localAi: LocalAiResult)
         continue;
       }
 
-      return parseNimResult(content, model, attemptedModels);
+      const result = parseAuthorshipResult(content, "NVIDIA NIM AI Оцінка", "Модель NVIDIA NIM визначила це як релевантний авторський сигнал.");
+      const note = attemptedModels.length > 1 ? `NVIDIA NIM fallback: спрацювала ${model}; перед цим пробували ${attemptedModels.slice(0, -1).join(", ")}.` : undefined;
+
+      return {
+        aiProbability: asScore(result.probability),
+        aiProvider: "nvidia-nim",
+        aiModel: model,
+        aiNote: note,
+        aiSignals: result.signals
+      };
     } catch (error) {
       errors.push(`${model}: ${error instanceof Error ? error.message : String(error)}`);
     }

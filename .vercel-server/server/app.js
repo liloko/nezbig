@@ -24,6 +24,25 @@ import { hydrateSearchCandidatesDetailed, searchWebCandidatesDetailed } from "./
 import { authMiddleware, saveUserReport } from "./auth.js";
 import { authRouter } from "./authRoutes.js";
 export const app = express();
+async function persistLlmOpinion(reportId, opinion) {
+    if (!reportId)
+        return;
+    try {
+        const stored = await getReport(reportId);
+        if (!stored || stored.aiOpinionProbability !== undefined)
+            return;
+        await saveReport(reportId, {
+            ...stored,
+            aiOpinionProbability: opinion.aiProbability,
+            aiOpinionModel: opinion.aiModel,
+            aiOpinionNote: opinion.aiNote,
+            aiOpinionSignals: opinion.aiSignals
+        });
+    }
+    catch (error) {
+        logger.warn(error);
+    }
+}
 app.use(helmet({
     contentSecurityPolicy: {
         directives: {
@@ -435,12 +454,14 @@ app.post("/api/ai-opinion", scanLimiter, async (request, response) => {
         }
         const opinion = await analyzeWithLlmProviders(text, {
             probability: Number(body.localProbability) || 0,
-            signals: Array.isArray(body.localSignals) ? body.localSignals : []
+            signals: Array.isArray(body.localSignals) ? body.localSignals : [],
+            suspiciousExcerpts: Array.isArray(body.suspiciousExcerpts) ? body.suspiciousExcerpts : []
         });
         if (!opinion) {
             response.status(400).json({ error: "API-ключ або список AI-моделей не налаштовано." });
             return;
         }
+        await persistLlmOpinion(body.reportId, opinion);
         response.json(opinion);
     }
     catch (error) {
@@ -461,14 +482,18 @@ app.post("/api/ai-opinion-file", fileLimiter, upload.single("file"), async (requ
             return;
         }
         const localSignals = typeof request.body.localSignals === "string" ? JSON.parse(request.body.localSignals) : [];
+        const rawExcerpts = typeof request.body.suspiciousExcerpts === "string" ? JSON.parse(request.body.suspiciousExcerpts) : [];
+        const reportId = typeof request.body.reportId === "string" && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(request.body.reportId) ? request.body.reportId : undefined;
         const opinion = await analyzeWithLlmProviders(text, {
             probability: Number(request.body.localProbability) || 0,
-            signals: Array.isArray(localSignals) ? localSignals : []
+            signals: Array.isArray(localSignals) ? localSignals : [],
+            suspiciousExcerpts: Array.isArray(rawExcerpts) ? rawExcerpts.filter((item) => typeof item === "string").slice(0, 8) : []
         });
         if (!opinion) {
             response.status(400).json({ error: "API-ключ або список AI-моделей не налаштовано." });
             return;
         }
+        await persistLlmOpinion(reportId, opinion);
         response.json(opinion);
     }
     catch (error) {

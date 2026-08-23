@@ -1,16 +1,11 @@
-import { normalizeWhitespace } from "./chunking.js";
-import type { AiSignal, LlmOpinion } from "../shared/types.js";
-
-type LocalAiResult = {
-  probability: number;
-  signals: AiSignal[];
-};
-
-type OpenRouterAiResult = LocalAiResult & {
-  provider: "openrouter";
-  model: string;
-  note?: string;
-};
+import type { LlmOpinion } from "../shared/types.js";
+import {
+  buildAnalysisSample,
+  JSON_SHAPE_PROMPT,
+  parseAuthorshipResult,
+  withTimeout,
+  type LocalAiResult
+} from "./llmShared.js";
 
 type OpenRouterMessage = {
   role: "system" | "user";
@@ -33,7 +28,6 @@ type OpenRouterResponse = {
 };
 
 const OPENROUTER_URL = "https://openrouter.ai/api/v1/chat/completions";
-const MAX_ANALYSIS_CHARS = 6000;
 const OPENROUTER_TIMEOUT_MS = 24_000;
 const FALLBACK_MODELS = [
   "deepseek/deepseek-chat:free",
@@ -56,71 +50,8 @@ function getOpenRouterConfig(): { apiKey: string; models: string[] } | null {
   return { apiKey, models };
 }
 
-function extractJsonObject(content: string): unknown {
-  const fenced = content.match(/```(?:json)?\s*([\s\S]*?)```/i);
-  const raw = fenced?.[1] ?? content;
-  const start = raw.indexOf("{");
-  const end = raw.lastIndexOf("}");
-
-  if (start === -1 || end === -1 || end <= start) {
-    throw new Error("OpenRouter returned no JSON object.");
-  }
-
-  return JSON.parse(raw.slice(start, end + 1));
-}
-
-function asScore(value: unknown): number {
-  const number = Number(value);
-  if (!Number.isFinite(number)) return 0;
-  return Math.max(0, Math.min(100, Math.round(number)));
-}
-
-function withTimeout(ms: number): AbortSignal {
-  const controller = new AbortController();
-  setTimeout(() => controller.abort(), ms).unref();
-  return controller.signal;
-}
-
-function parseAiResult(content: string, model: string, attemptedModels: string[]): OpenRouterAiResult {
-  const parsed = extractJsonObject(content) as {
-    probability?: unknown;
-    signals?: Array<{
-      label?: unknown;
-      score?: unknown;
-      detail?: unknown;
-      evidence?: unknown;
-    }>;
-  };
-
-  const signals = (Array.isArray(parsed.signals) ? parsed.signals : []).slice(0, 6).map((signal): AiSignal => ({
-    label: String(signal.label || "OpenRouter Signal").slice(0, 80),
-    score: asScore(signal.score),
-    detail: String(signal.detail || "Model identified this as a relevant authorship signal.").slice(0, 280),
-    category: "pattern",
-    evidence: Array.isArray(signal.evidence) ? signal.evidence.map((item) => String(item).slice(0, 140)).slice(0, 4) : []
-  }));
-
-  return {
-    provider: "openrouter",
-    model,
-    note: attemptedModels.length > 1 ? `AI fallback: спрацювала ${model}; перед цим пробували ${attemptedModels.slice(0, -1).join(", ")}.` : undefined,
-    probability: asScore(parsed.probability),
-    signals:
-      signals.length > 0
-        ? signals
-        : [
-            {
-              label: "OpenRouter AI Оцінка",
-              score: asScore(parsed.probability),
-              detail: "Модель повернула загальну оцінку без деталізованих сигналів.",
-              category: "pattern"
-            }
-          ]
-  };
-}
-
 function buildMessages(text: string, localAi: LocalAiResult): OpenRouterMessage[] {
-  const sample = normalizeWhitespace(text).slice(0, MAX_ANALYSIS_CHARS);
+  const sample = buildAnalysisSample(text, localAi.suspiciousExcerpts ?? []);
 
   return [
     {
@@ -132,18 +63,7 @@ function buildMessages(text: string, localAi: LocalAiResult): OpenRouterMessage[
       role: "user",
       content: `Analyze whether this text appears AI-generated. Use the local heuristic only as context, not as truth.
 
-Return JSON with this exact shape:
-{
-  "probability": 0-100,
-  "signals": [
-    {
-      "label": "short Ukrainian or English label",
-      "score": 0-100,
-      "detail": "one sentence explaining the signal and uncertainty",
-      "evidence": ["short quoted or paraphrased evidence"]
-    }
-  ]
-}
+${JSON_SHAPE_PROMPT}
 
 Local heuristic probability: ${localAi.probability}
 Local heuristic signals: ${JSON.stringify(localAi.signals.slice(0, 6))}
@@ -225,12 +145,14 @@ export async function analyzeWithOpenRouter(text: string, localAi: LocalAiResult
     }
 
     try {
-      const result = parseAiResult(content, model, attemptedModels);
+      const result = parseAuthorshipResult(content, "OpenRouter AI Оцінка", "Модель повернула загальну оцінку без деталізованих сигналів.");
+      const note = attemptedModels.length > 1 ? `AI fallback: спрацювала ${model}; перед цим пробували ${attemptedModels.slice(0, -1).join(", ")}.` : undefined;
+
       return {
         aiProbability: result.probability,
         aiProvider: "openrouter",
-        aiModel: result.model,
-        aiNote: result.note,
+        aiModel: model,
+        aiNote: note,
         aiSignals: result.signals
       };
     } catch (error) {
