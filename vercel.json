@@ -13,6 +13,10 @@
     {
       "source": "/history/(.*)",
       "destination": "/index.html"
+    },
+    {
+      "source": "/((?!api/).*)",
+      "destination": "/index.html"
     }
   ]
 }

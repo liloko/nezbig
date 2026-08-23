@@ -7,6 +7,9 @@ export default defineConfig({
     react(),
     VitePWA({
       registerType: "autoUpdate",
+      workbox: {
+        navigateFallbackDenylist: [/^\/api\//]
+      },
       manifest: {
         name: "Незбіг — перевірка тексту на плагіат",
         short_name: "Незбіг",
