@@ -45,7 +45,7 @@ export default function Home({ showToast }: { showToast: (msg: string, type?: "s
       if (current.chunkWords === recommended.chunkWords && current.overlapWords === recommended.overlapWords) return current;
       return recommended;
     });
-  }, [wordCount]);
+  }, [wordCount, settings.sensitivity]);
 
   useEffect(() => {
     if (!report) return;

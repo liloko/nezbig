@@ -393,7 +393,6 @@ input[type="radio"]:checked {
 
 .rise-in {
   animation: riseIn 0.7s var(--ease-out) both;
-  opacity: 0;
 }
 
 .d-1 { animation-delay: 0.05s; }
@@ -404,6 +403,14 @@ input[type="radio"]:checked {
 @keyframes riseIn {
   from { opacity: 0; transform: translateY(16px); }
   to { opacity: 1; transform: translateY(0); }
+}
+
+.cta-main.rise-in:not(:disabled) {
+  animation: riseIn 0.7s var(--ease-out) 0.3s both, ctaGlow 3.4s ease-in-out 1.2s infinite;
+}
+
+.cta-main.rise-in:disabled {
+  animation: riseIn 0.7s var(--ease-out) 0.3s both;
 }
 
 /* ── Scrollbar polish ──────────────────────────────────────────── */
@@ -417,15 +424,10 @@ input[type="radio"]:checked {
 @media (prefers-reduced-motion: reduce) {
   .bg-atmosphere::before,
   .cta-main::after,
-  .cta-main:not(:disabled),
+  .cta-main.rise-in,
   .brand-version,
   .editor-empty-icon,
   .glass-panel:has(.editor-shell:focus-within) .word-counter::before {
     animation: none !important;
-  }
-
-  .rise-in {
-    animation: none;
-    opacity: 1;
   }
 }
