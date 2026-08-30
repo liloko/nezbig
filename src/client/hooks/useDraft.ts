@@ -35,7 +35,12 @@ export function useDraft(text: string, html: string, fileName: string, onRestore
         localStorage.removeItem(DRAFT_KEY);
         return;
       }
-      if (draft.text.length > 120 && window.confirm(`Відновити чернетку «${draft.fileName}» від ${new Date(draft.savedAt).toLocaleString("uk-UA")}?`)) {
+      const lang = (localStorage.getItem("nezbig_lang") as "uk" | "en") || "en";
+      const dateStr = new Date(draft.savedAt).toLocaleString(lang === "uk" ? "uk-UA" : "en-US");
+      const confirmPrompt = lang === "uk"
+        ? `Відновити чернетку «${draft.fileName}» від ${dateStr}?`
+        : `Restore draft "${draft.fileName}" from ${dateStr}?`;
+      if (draft.text.length > 120 && window.confirm(confirmPrompt)) {
         onRestore(draft);
       }
     } catch {

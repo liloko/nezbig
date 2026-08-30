@@ -55,6 +55,27 @@ export function translateSignalDetail(detail: string, lang: Language): string {
     "Suspicious markers concentrated in $1 of $2 verified segments. Coordinates of strongest sections listed below."
   );
 
+  // Stylometric natural details
+  text = text.replace(
+    /Варіативність довжини речень виглядає природною\.?/i,
+    "Sentence length variation appears natural."
+  );
+
+  text = text.replace(
+    /Знайдено (\d+) маркер(?:а|ів)?\. Вони часто зустрічаються у згенерованих текстах\.?/i,
+    "Found $1 markers commonly occurring in generated texts."
+  );
+
+  text = text.replace(
+    /Перехідні слова у нормі\.?/i,
+    "Transition words within normal range."
+  );
+
+  text = text.replace(
+    /Базовий звіт згенеровано локально\.\s*AI-думка підвантажується після звіту\.?/i,
+    "Base report generated locally. AI opinion loading in background."
+  );
+
   // Generic phrase replacements
   text = text
     .replace(/слів\/КВ/g, "words/KB")
@@ -99,6 +120,12 @@ export function translateScanNote(note: string, lang: Language): string {
   text = text.replace(
     /Титулку пропущено:\s*(\d+)\s*слів/i,
     "Title page skipped: $1 words"
+  );
+
+  // Page verification note
+  text = text.replace(
+    /Перевірка сторінок:\s*підтверджено\s*(\d+),\s*недоступно\s*(\d+),\s*кеш-влучень\s*(\d+),\s*повторно не завантажувались\s*(\d+)\.?/i,
+    "Page verification: $1 verified, $2 unavailable, $3 cache hits, $4 re-downloads."
   );
 
   // Direct file check note
@@ -149,6 +176,11 @@ export function translateReportSummary(summary: string, lang: Language): string 
   );
 
   text = text.replace(
+    /Сильних збігів у відкритих вебджерелах не знайдено\.\s*Локальний AI-аналіз показує низький ризик;\s*індикатор:\s*(\d+)%\.?/i,
+    "No strong matches found in open web sources. Local AI analysis indicates low risk; indicator: $1%."
+  );
+
+  text = text.replace(
     /Сильних збігів у відкритих вебджерелах не знайдено\.\s*Локальний AI-аналіз показав підвищений ризик штучної генерації;\s*індикатор ризику:\s*(\d+)%\.?/i,
     "No strong matches found in open web sources. Local AI analysis indicates elevated risk of AI generation; risk indicator: $1%."
   );
@@ -184,6 +216,16 @@ export function translateReliabilityReason(reason: string, lang: Language): stri
   text = text.replace(
     /Сегменти сильно відрізняються між собою;\s*документ може мати змішане походження або різні жанри\.?/i,
     "Segments vary significantly; document may have mixed origin or different styles."
+  );
+
+  text = text.replace(
+    /Обсяг достатній,\s*а сегментні оцінки узгоджені\.?/i,
+    "Sufficient text volume and consistent segment scores."
+  );
+
+  text = text.replace(
+    /Оцінка має помірну доказовість і потребує ручної перевірки сигналів\.?/i,
+    "Assessment has moderate evidential weight and requires manual review of signals."
   );
 
   text = text.replace(

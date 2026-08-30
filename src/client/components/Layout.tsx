@@ -182,22 +182,28 @@ export function Layout() {
             <button onClick={() => setShowFeedback(false)} className="absolute top-4 right-4 text-on-surface-variant hover:text-white transition-colors">
               <span className="material-symbols-outlined">close</span>
             </button>
-            <h3 className="text-headline-sm font-headline-sm text-white mb-4">Повідомити про помилку</h3>
+            <h3 className="text-headline-sm font-headline-sm text-white mb-4">
+              {lang === "uk" ? "Повідомити про помилку" : "Report an Issue"}
+            </h3>
             {feedbackSent ? (
-              <div className="text-emerald-glow text-center py-8 font-medium">Дякуємо! Ваш відгук надіслано.</div>
+              <div className="text-emerald-glow text-center py-8 font-medium">
+                {lang === "uk" ? "Дякуємо! Ваш відгук надіслано." : "Thank you! Your feedback has been sent."}
+              </div>
             ) : (
               <form onSubmit={handleFeedbackSubmit} className="flex flex-col gap-4">
                 <textarea
                   className="w-full h-32 bg-surface-container/50 border border-white/20 rounded-lg p-3 text-white placeholder:text-on-surface-variant/50 focus:border-emerald-glow focus:ring-1 focus:ring-emerald-glow transition-all resize-none custom-scrollbar"
-                  placeholder="Опишіть проблему детально..."
+                  placeholder={lang === "uk" ? "Опишіть проблему детально..." : "Describe the issue in detail..."}
                   value={feedbackText}
                   onChange={(e) => setFeedbackText(e.target.value)}
                   autoFocus
                 />
                 <div className="flex justify-end gap-3 mt-2">
-                  <button type="button" onClick={() => setShowFeedback(false)} className="px-4 py-2 text-on-surface-variant hover:text-white transition-colors">Скасувати</button>
+                  <button type="button" onClick={() => setShowFeedback(false)} className="px-4 py-2 text-on-surface-variant hover:text-white transition-colors">
+                    {lang === "uk" ? "Скасувати" : "Cancel"}
+                  </button>
                   <button type="submit" disabled={submittingFeedback || !feedbackText.trim()} className="px-6 py-2 bg-emerald-glow text-on-primary rounded-lg font-medium hover:bg-emerald-glow/90 disabled:opacity-50 transition-colors">
-                    {submittingFeedback ? "Надсилання..." : "Надіслати"}
+                    {submittingFeedback ? (lang === "uk" ? "Надсилання..." : "Sending...") : (lang === "uk" ? "Надіслати" : "Submit")}
                   </button>
                 </div>
               </form>

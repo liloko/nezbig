@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { useLanguage } from "../context/LanguageContext";
 
 export interface DiffPart {
   count?: number;
@@ -8,6 +9,7 @@ export interface DiffPart {
 }
 
 export function DiffPanel() {
+  const { lang } = useLanguage();
   const [original, setOriginal] = useState("");
   const [modified, setModified] = useState("");
   const [diffResult, setDiffResult] = useState<DiffPart[] | null>(null);
@@ -16,7 +18,7 @@ export function DiffPanel() {
 
   const handleCompare = async () => {
     if (!original.trim() || !modified.trim()) {
-      setError("Вставте обидва тексти для порівняння.");
+      setError(lang === "uk" ? "Вставте обидва тексти для порівняння." : "Paste both texts to compare.");
       return;
     }
     
@@ -32,7 +34,7 @@ export function DiffPanel() {
       });
       
       const payload = await res.json();
-      if (!res.ok) throw new Error(payload.error || "Помилка при порівнянні");
+      if (!res.ok) throw new Error(payload.error || (lang === "uk" ? "Помилка при порівнянні" : "Diff comparison failed"));
       
       setDiffResult(payload);
     } catch (err) {
@@ -53,23 +55,23 @@ export function DiffPanel() {
     <section className="diff-panel workspace">
       <div className="diff-inputs">
         <div className="diff-input-group">
-          <label htmlFor="diff-original">Оригінальний текст</label>
+          <label htmlFor="diff-original">{lang === "uk" ? "Оригінальний текст" : "Original Text"}</label>
           <textarea
             id="diff-original"
             className="diff-textarea"
             value={original}
             onChange={(e) => setOriginal(e.target.value)}
-            placeholder="Вставте початковий варіант тексту сюди..."
+            placeholder={lang === "uk" ? "Вставте початковий варіант тексту сюди..." : "Paste original text version here..."}
           />
         </div>
         <div className="diff-input-group">
-          <label htmlFor="diff-modified">Редагований варіант</label>
+          <label htmlFor="diff-modified">{lang === "uk" ? "Редагований варіант" : "Revised Text"}</label>
           <textarea
             id="diff-modified"
             className="diff-textarea"
             value={modified}
             onChange={(e) => setModified(e.target.value)}
-            placeholder="Вставте змінений текст сюди..."
+            placeholder={lang === "uk" ? "Вставте змінений текст сюди..." : "Paste modified text version here..."}
           />
         </div>
       </div>
@@ -80,14 +82,14 @@ export function DiffPanel() {
           onClick={handleCompare} 
           disabled={busy || (!original.trim() || !modified.trim())}
         >
-          {busy ? "Аналіз..." : "Порівняти"}
+          {busy ? (lang === "uk" ? "Аналіз..." : "Comparing...") : (lang === "uk" ? "Порівняти" : "Compare")}
         </button>
         <button 
           className="secondary-button" 
           onClick={handleClear} 
           disabled={busy || (!original && !modified && !diffResult)}
         >
-          Очистити
+          {lang === "uk" ? "Очистити" : "Clear"}
         </button>
       </div>
 
@@ -95,7 +97,7 @@ export function DiffPanel() {
 
       {diffResult && (
         <div className="diff-result">
-          <h3 className="diff-result-title">Результат порівняння (Inline Diff)</h3>
+          <h3 className="diff-result-title">{lang === "uk" ? "Результат порівняння (Inline Diff)" : "Comparison Result (Inline Diff)"}</h3>
           <div className="diff-content">
             {diffResult.map((part, index) => {
               if (part.added) {

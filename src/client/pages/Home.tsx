@@ -74,13 +74,13 @@ export default function Home({ showToast }: { showToast: (msg: string, type?: "s
 
   function requestAiOpinion(target: ScanReport, input: { text: string; file: File | null }) {
     loadLlmOpinion(target, input.text, input.file).catch(() => {
-      showToast("AI-думка зараз недоступна — можна спробувати ще раз у звіті.", "error");
+      showToast(lang === "uk" ? "AI-думка зараз недоступна — можна спробувати ще раз у звіті." : "AI opinion currently unavailable — you can retry in the report.", "error");
     });
   }
 
   async function handleSubmit() {
     if (!canScan) {
-      showToast("Додайте файл або щонайменше 120 символів тексту.", "error");
+      showToast(lang === "uk" ? "Додайте файл або щонайменше 120 символів тексту." : "Please add a file or at least 120 characters of text.", "error");
       return;
     }
 
@@ -100,13 +100,13 @@ export default function Home({ showToast }: { showToast: (msg: string, type?: "s
       const input = { text: editor.text, file: editor.selectedFile };
       setLastScanInput(input);
       clearDraft();
-      showToast("Базовий звіт готовий.", "success");
+      showToast(lang === "uk" ? "Базовий звіт готовий." : "Base report is ready.", "success");
       requestAiOpinion(result, input);
     } catch (error) {
       if (error instanceof Error && error.name === "AbortError") {
-        showToast("Перевірку скасовано.", "error");
+        showToast(lang === "uk" ? "Перевірку скасовано." : "Scan cancelled.", "error");
       } else {
-        showToast(error instanceof Error ? error.message : "Перевірка не вдалася.", "error");
+        showToast(error instanceof Error ? error.message : (lang === "uk" ? "Перевірка не вдалася." : "Scan failed."), "error");
       }
     }
   }
@@ -115,10 +115,10 @@ export default function Home({ showToast }: { showToast: (msg: string, type?: "s
     return (
       <div className="max-w-container-max mx-auto px-gutter py-8 md:py-12 relative z-10 fade-in flex flex-col gap-8">
         {busy && (
-          <LoadingPanel busy={busy} llmBusy={llmBusy} progress={progress} estimatedSeconds={formatDuration(estimatedSeconds)} onCancel={cancel} />
+          <LoadingPanel busy={busy} llmBusy={llmBusy} progress={progress} estimatedSeconds={formatDuration(estimatedSeconds, lang)} onCancel={cancel} />
         )}
         {report && (
-          <Suspense fallback={<div className="loading-skeleton">Завантаження звіту…</div>}>
+          <Suspense fallback={<div className="loading-skeleton">{lang === "uk" ? "Завантаження звіту…" : "Loading report…"}</div>}>
             <ReportView
               report={report}
               llmBusy={llmBusy}
