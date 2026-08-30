@@ -5,6 +5,7 @@ import { useDragDrop } from "../hooks/useDragDrop";
 import { useDraft } from "../hooks/useDraft";
 import { useFaviconProgress } from "../hooks/useFaviconProgress";
 import { useDocumentEditor } from "../hooks/useDocumentEditor";
+import { useLanguage } from "../context/LanguageContext";
 import { recommendSettings, estimateScanSeconds, formatDuration, defaultSettings } from "../utils/scanSettings";
 import type { ScanReport } from "../../shared/types";
 import { LoadingPanel } from "../components/LoadingPanel";
@@ -14,6 +15,7 @@ import { AdsterraBanner } from "../components/AdsterraBanner";
 const ReportView = lazy(() => import("../components/ReportView").then(m => ({ default: m.ReportView })));
 
 export default function Home({ showToast }: { showToast: (msg: string, type?: "success" | "error" | "info") => void }) {
+  const { t, lang } = useLanguage();
   const [settings, setSettings] = useState(defaultSettings);
   const reportRef = useRef<HTMLElement | null>(null);
 
@@ -162,18 +164,18 @@ export default function Home({ showToast }: { showToast: (msg: string, type?: "s
                       <span className="truncate max-w-[240px] sm:max-w-[380px]">{editor.selectedFile.name}</span>
                     </span>
                   ) : (
-                    "Вставте текст або завантажте файл"
+                    lang === "uk" ? "Вставте текст або завантажте файл" : "Paste text or upload document"
                   )}
                 </h2>
                 <span className="font-label-sm text-label-sm text-on-surface-variant mt-0.5">
-                  {editor.selectedFile ? "Файл завантажено та готовий до перевірки" : "Підтримуються формати .docx, .pdf"}
+                  {editor.selectedFile ? t("fileReady") : t("fileFormats")}
                 </span>
               </div>
 
               <div className="flex items-center gap-3 shrink-0">
                 <label className="upload-chip bg-surface-variant/80 hover:bg-surface-bright text-white px-4 py-2 rounded-full font-label-sm text-label-sm border border-outline-variant hover:border-emerald-glow transition-all flex items-center gap-2 cursor-pointer">
                   <span className="material-symbols-outlined text-[18px]">upload_file</span>
-                  {editor.selectedFile ? "Замінити файл" : "Вибрати файл"}
+                  {editor.selectedFile ? (lang === "uk" ? "Замінити файл" : "Replace file") : (lang === "uk" ? "Вибрати файл" : "Choose file")}
                   <input type="file" className="hidden" accept=".docx,.pdf" onChange={(e) => {
                     const file = e.target.files?.[0];
                     if (file) {
@@ -202,17 +204,17 @@ export default function Home({ showToast }: { showToast: (msg: string, type?: "s
                       <path d="M9 12h6M9 16h4" />
                     </svg>
                   </span>
-                  <p className="text-body-lg">Вставте текст з Word або скопіюйте сюди текст...</p>
+                  <p className="text-body-lg">{lang === "uk" ? "Вставте текст з Word або скопіюйте сюди текст..." : "Paste text from Word or type your content here..."}</p>
                   <span className="kbd-hint"><kbd>Ctrl</kbd> + <kbd>V</kbd></span>
                 </div>
               )}
             </div>
             <div className="px-6 py-3 border-t border-white/10 flex justify-between items-center bg-surface-container/60 shrink-0">
-              <span className="word-counter font-label-sm text-label-sm text-on-surface-variant">{wordCount} слів</span>
+              <span className="word-counter font-label-sm text-label-sm text-on-surface-variant">{wordCount} {t("wordsCount")}</span>
               <button
                 type="button"
                 aria-label="Clear text"
-                title="Очистити поле"
+                title={t("clearText")}
                 className="clear-button p-1.5 rounded-lg text-on-surface-variant hover:text-error hover:bg-error/10 transition-all flex items-center justify-center cursor-pointer"
                 onClick={() => {
                   editor.setEditorContent("", "");
@@ -228,29 +230,29 @@ export default function Home({ showToast }: { showToast: (msg: string, type?: "s
 
         <div className="lg:col-span-4 flex flex-col gap-6 min-h-[600px] h-[calc(100vh-240px)] rise-in d-2">
           <div className="glass-panel rounded-xl p-8 flex flex-col border flex-grow overflow-y-auto custom-scrollbar">
-            <h3 className="panel-eyebrow font-headline-md text-headline-md text-white mb-4">Параметри</h3>
+            <h3 className="panel-eyebrow font-headline-md text-headline-md text-white mb-4">{lang === "uk" ? "Параметри" : "Scan Settings"}</h3>
             <div className="flex flex-col gap-4">
-              <h4 className="font-body-lg text-body-lg text-white font-medium">Режим перевірки</h4>
+              <h4 className="font-body-lg text-body-lg text-white font-medium">{lang === "uk" ? "Режим перевірки" : "Sensitivity Mode"}</h4>
               <div className="flex flex-col gap-4">
                 <label className="mode-card flex items-start gap-4 p-4 rounded-lg bg-surface-container-high/60 hover:bg-surface-bright/80 backdrop-blur-sm transition-colors cursor-pointer border border-transparent hover:border-white/20 has-[:checked]:border-emerald-glow/50 has-[:checked]:bg-emerald-glow/20">
                   <input type="radio" name="check_mode" className="mt-1" checked={settings.sensitivity === "quick"} onChange={() => setSettings(s => ({...s, sensitivity: "quick"}))} />
                   <div className="flex flex-col">
-                    <span className="font-body-md text-body-md text-white font-medium">Швидко</span>
-                    <span className="font-label-sm text-label-sm text-on-surface-variant mt-1">Короткий огляд, менше запитів</span>
+                    <span className="font-body-md text-body-md text-white font-medium">{lang === "uk" ? "Швидко" : "Standard Fast"}</span>
+                    <span className="font-label-sm text-label-sm text-on-surface-variant mt-1">{lang === "uk" ? "Короткий огляд, менше запитів" : "Quick overview and fast report"}</span>
                   </div>
                 </label>
                 <label className="mode-card flex items-start gap-4 p-4 rounded-lg bg-surface-container-high/60 hover:bg-surface-bright/80 backdrop-blur-sm transition-colors cursor-pointer border border-transparent hover:border-white/20 has-[:checked]:border-emerald-glow/50 has-[:checked]:bg-emerald-glow/20">
                   <input type="radio" name="check_mode" className="mt-1" checked={settings.sensitivity === "balanced"} onChange={() => setSettings(s => ({...s, sensitivity: "balanced"}))} />
                   <div className="flex flex-col">
-                    <span className="font-body-md text-body-md text-white font-medium">Глибоко</span>
-                    <span className="font-label-sm text-label-sm text-on-surface-variant mt-1">Детальний аналіз, вища точність</span>
+                    <span className="font-body-md text-body-md text-white font-medium">{lang === "uk" ? "Глибоко" : "Deep Analysis"}</span>
+                    <span className="font-label-sm text-label-sm text-on-surface-variant mt-1">{lang === "uk" ? "Детальний аналіз, вища точність" : "Full coverage with academic indexing"}</span>
                   </div>
                 </label>
                 <label className="mode-card flex items-start gap-4 p-4 rounded-lg bg-surface-container-high/60 hover:bg-surface-bright/80 backdrop-blur-sm transition-colors cursor-pointer border border-transparent hover:border-white/20 has-[:checked]:border-emerald-glow/50 has-[:checked]:bg-emerald-glow/20">
                   <input type="radio" name="check_mode" className="mt-1" checked={settings.sensitivity === "deep"} onChange={() => setSettings(s => ({...s, sensitivity: "deep"}))} />
                   <div className="flex flex-col">
-                    <span className="font-body-md text-body-md text-white font-medium">Експертно</span>
-                    <span className="font-label-sm text-label-sm text-on-surface-variant mt-1">Максимальна перевірка</span>
+                    <span className="font-body-md text-body-md text-white font-medium">{lang === "uk" ? "Експертно" : "Expert Scan"}</span>
+                    <span className="font-label-sm text-label-sm text-on-surface-variant mt-1">{lang === "uk" ? "Максимальна перевірка з науковими базами" : "Max sensitivity, Crossref & OpenAlex"}</span>
                   </div>
                 </label>
               </div>
@@ -261,22 +263,22 @@ export default function Home({ showToast }: { showToast: (msg: string, type?: "s
             <div className="absolute inset-0 bg-gradient-to-br from-emerald-glow/20 to-transparent pointer-events-none"></div>
             <div className="flex justify-between items-center relative z-10">
               <div className="flex flex-col">
-                <span className="font-label-sm text-label-sm text-on-surface-variant">Розмір фрагмента</span>
-                <span className="stat-value font-body-lg text-body-lg text-white font-medium mt-1">{settings.chunkWords} слів</span>
+                <span className="font-label-sm text-label-sm text-on-surface-variant">{lang === "uk" ? "Розмір фрагмента" : "Chunk Size"}</span>
+                <span className="stat-value font-body-lg text-body-lg text-white font-medium mt-1">{settings.chunkWords} {t("wordsCount")}</span>
               </div>
               <div className="flex flex-col text-center">
-                <span className="font-label-sm text-label-sm text-on-surface-variant">Орієнтовно</span>
+                <span className="font-label-sm text-label-sm text-on-surface-variant">{lang === "uk" ? "Орієнтовно" : "Est. Time"}</span>
                 <span className="stat-value font-body-lg text-body-lg text-white font-medium mt-1">~{formatDuration(estimatedSeconds)}</span>
               </div>
               <div className="flex flex-col text-right">
-                <span className="font-label-sm text-label-sm text-on-surface-variant">Перекриття</span>
-                <span className="stat-value font-body-lg text-body-lg text-white font-medium mt-1">{settings.overlapWords} слів</span>
+                <span className="font-label-sm text-label-sm text-on-surface-variant">{lang === "uk" ? "Перекриття" : "Overlap"}</span>
+                <span className="stat-value font-body-lg text-body-lg text-white font-medium mt-1">{settings.overlapWords} {t("wordsCount")}</span>
               </div>
             </div>
           </div>
 
             <button onClick={handleSubmit} disabled={busy || !canScan} className="cta-main group relative z-10 bg-gradient-to-br from-emerald-glow to-primary-container hover:from-primary hover:to-emerald-glow text-on-primary font-headline-md text-body-lg font-medium py-4 px-6 rounded-xl transition-all duration-300 transform hover:-translate-y-1 flex items-center justify-center gap-3 disabled:opacity-50 disabled:hover:translate-y-0 w-full shrink-0 rise-in d-4">
-              <span className="relative z-10">Запустити перевірку</span>
+              <span className="relative z-10">{t("runScan")}</span>
               <span className="relative z-10 material-symbols-outlined text-3xl transition-transform group-hover:translate-x-1">arrow_forward</span>
             </button>
           </div>

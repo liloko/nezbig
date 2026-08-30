@@ -2,10 +2,12 @@ import { useState, useEffect } from "react";
 import { Link, NavLink, Outlet, useNavigate } from "react-router-dom";
 import { BrandLogo } from "./BrandLogo";
 import { useAuth } from "../hooks/useAuth";
+import { useLanguage } from "../context/LanguageContext";
 import { AuthModal } from "./AuthModal";
 
 export function Layout() {
   const { user, isLoggedIn, logout } = useAuth();
+  const { lang, setLang, t } = useLanguage();
   
   const [showFeedback, setShowFeedback] = useState(false);
   const [feedbackText, setFeedbackText] = useState("");
@@ -66,18 +68,34 @@ export function Layout() {
             <Link to="/" className="brand-link flex items-center gap-2 group">
               <BrandLogo className="w-10 h-10 group-hover:scale-110 group-hover:rotate-3 transition-transform duration-500" />
               <div className="flex flex-col">
-                <span className="text-headline-md font-headline-md font-bold tracking-tight text-white">НЕЗБІГ <span className="brand-version text-emerald-glow">2.0</span></span>
-                <span className="font-label-sm text-label-sm text-on-surface-variant">Немає збігів. Є власний текст.</span>
+                <span className="text-headline-md font-headline-md font-bold tracking-tight text-white">
+                  {lang === "uk" ? "НЕЗБІГ" : "NEZBIG"} <span className="brand-version text-emerald-glow">2.0</span>
+                </span>
+                <span className="font-label-sm text-label-sm text-on-surface-variant">{t("brandTagline")}</span>
               </div>
             </Link>
           </div>
           {/* Navigation Links */}
           <div className="hidden md:flex items-center gap-8">
-            <NavLink to="/" end className={({ isActive }) => isActive ? "nav-link nav-link--active text-emerald-glow font-bold text-body-md transition-colors duration-300 hover:bg-white/5 rounded px-1" : "nav-link text-on-surface-variant hover:text-white transition-colors duration-300 text-body-md hover:bg-white/5 rounded px-1"}>Головна</NavLink>
-            <NavLink to="/humanize" className={({ isActive }) => isActive ? "nav-link nav-link--active text-emerald-glow font-bold text-body-md transition-colors duration-300 hover:bg-white/5 rounded px-1" : "nav-link text-on-surface-variant hover:text-white transition-colors duration-300 text-body-md hover:bg-white/5 rounded px-1"}>Олюднення тексту</NavLink>
+            <NavLink to="/" end className={({ isActive }) => isActive ? "nav-link nav-link--active text-emerald-glow font-bold text-body-md transition-colors duration-300 hover:bg-white/5 rounded px-1" : "nav-link text-on-surface-variant hover:text-white transition-colors duration-300 text-body-md hover:bg-white/5 rounded px-1"}>
+              {t("navHome")}
+            </NavLink>
+            <NavLink to="/humanize" className={({ isActive }) => isActive ? "nav-link nav-link--active text-emerald-glow font-bold text-body-md transition-colors duration-300 hover:bg-white/5 rounded px-1" : "nav-link text-on-surface-variant hover:text-white transition-colors duration-300 text-body-md hover:bg-white/5 rounded px-1"}>
+              {t("navHumanize")}
+            </NavLink>
           </div>
-          {/* User Actions */}
+          {/* User Actions & Language */}
           <div className="flex items-center gap-3 relative" data-user-menu>
+            {/* Language Switcher */}
+            <button
+              type="button"
+              onClick={() => setLang(lang === "uk" ? "en" : "uk")}
+              className="px-2.5 py-1.5 rounded-lg border border-white/10 hover:border-emerald-glow/40 bg-surface-container/60 text-xs font-semibold text-white/90 hover:text-emerald-glow transition-all flex items-center gap-1.5 cursor-pointer shadow-sm"
+              title={lang === "uk" ? "Switch to English" : "Перемкнути на українську"}
+            >
+              <span>{lang === "uk" ? "🇺🇦 UA" : "🇬🇧 EN"}</span>
+            </button>
+
             {isLoggedIn ? (
               <span className="text-body-md text-emerald-glow hidden sm:block truncate max-w-[120px] font-medium">{user?.name}</span>
             ) : (
@@ -85,7 +103,7 @@ export function Layout() {
                 onClick={() => setShowAuthModal(true)}
                 className="signin-btn px-4 py-1.5 rounded-full border border-emerald-glow/40 text-emerald-glow hover:bg-emerald-glow/10 font-medium text-body-md transition-all hidden sm:block"
               >
-                Увійти
+                {t("signIn")}
               </button>
             )}
             <button 
@@ -110,12 +128,12 @@ export function Layout() {
                     </div>
                     <button onClick={() => { setShowUserMenu(false); navigate("/history"); }} className="w-full text-left px-4 py-2.5 text-body-md text-on-surface-variant hover:text-white hover:bg-white/5 transition-colors flex items-center gap-2.5">
                       <span className="material-symbols-outlined text-[20px] text-emerald-glow">history</span>
-                      Історія перевірок
+                      {t("navHistory")}
                     </button>
                     <div className="border-t border-white/5 mt-1 pt-1">
                       <button onClick={async () => { setShowUserMenu(false); await logout(); }} className="w-full text-left px-4 py-2.5 text-body-md text-error hover:bg-error/10 transition-colors flex items-center gap-2.5">
                         <span className="material-symbols-outlined text-[20px]">logout</span>
-                        Вийти
+                        {t("signOut")}
                       </button>
                     </div>
                   </div>
@@ -123,7 +141,7 @@ export function Layout() {
                   <div className="flex flex-col">
                     <button onClick={() => { setShowUserMenu(false); setShowAuthModal(true); }} className="w-full text-left px-4 py-2.5 text-body-md text-emerald-glow hover:text-white hover:bg-white/5 transition-colors flex items-center gap-2.5 font-medium">
                       <span className="material-symbols-outlined text-[20px]">login</span>
-                      Увійти в акаунт
+                      {t("signIn")}
                     </button>
                   </div>
                 )}
@@ -142,14 +160,14 @@ export function Layout() {
       <footer className="w-full py-8 mt-auto border-t border-white/10 relative z-10 bg-surface/80 backdrop-blur-md">
         <div className="max-w-container-max mx-auto flex flex-col md:flex-row justify-between items-center px-gutter">
           <div className="flex flex-col items-center md:items-start mb-4 md:mb-0">
-            <span className="font-headline-md text-white mb-2 font-bold">НЕЗБІГ <span className="text-emerald-glow">2.0</span></span>
-            <span className="font-label-sm text-label-sm text-on-surface-variant">© 2026 НЕЗБІГ 2.0. Немає збігів. Є власний текст.</span>
+            <span className="font-headline-md text-white mb-2 font-bold">{lang === "uk" ? "НЕЗБІГ" : "NEZBIG"} <span className="text-emerald-glow">2.0</span></span>
+            <span className="font-label-sm text-label-sm text-on-surface-variant">{t("copyright")}</span>
           </div>
           <div className="flex flex-wrap gap-6 font-label-sm text-label-sm text-on-surface-variant">
-            <Link className="hover:text-emerald-glow transition-colors" to="/about">Про нас</Link>
-            <Link className="hover:text-emerald-glow transition-colors" to="/privacy">Конфіденційність</Link>
-            <Link className="hover:text-emerald-glow transition-colors" to="/terms">Умови використання</Link>
-            <button onClick={() => setShowFeedback(true)} className="hover:text-emerald-glow transition-colors cursor-pointer text-left">Повідомити про помилку</button>
+            <Link className="hover:text-emerald-glow transition-colors" to="/about">{t("aboutUs")}</Link>
+            <Link className="hover:text-emerald-glow transition-colors" to="/privacy">{t("privacy")}</Link>
+            <Link className="hover:text-emerald-glow transition-colors" to="/terms">{t("terms")}</Link>
+            <button onClick={() => setShowFeedback(true)} className="hover:text-emerald-glow transition-colors cursor-pointer text-left">{t("reportBug")}</button>
           </div>
         </div>
       </footer>
