@@ -2,6 +2,7 @@ import type { ScanReport } from "../../shared/types";
 import { SignalCard } from "./SignalCard";
 import { useLanguage } from "../context/LanguageContext";
 import { reliabilityLabel, languageLabel, formatNumber, isDuplicateOpinionSignal } from "../utils/reportLabels";
+import { translateReliabilityReason } from "../utils/reportI18n";
 import { stripHtml } from "../utils/sanitizeHtml";
 
 interface AiAnalysisPanelProps {
@@ -29,7 +30,7 @@ export function AiAnalysisPanel({ report, llmBusy, primarySignals, onRetryOpinio
         <span>
           {report.aiReliability.segmentCount} {lang === "uk" ? "сегм. · розкид" : "segm. · variance"} {report.aiReliability.segmentSpread} {lang === "uk" ? "п.п." : "pts"}
         </span>
-        <p>{report.aiReliability.reason}</p>
+        <p>{translateReliabilityReason(report.aiReliability.reason, lang)}</p>
       </div>
       <div className="ai-context-strip" aria-label={lang === "uk" ? "Контекст локального AI-аналізу" : "Local AI context"}>
         <span>

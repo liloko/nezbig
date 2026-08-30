@@ -7,6 +7,7 @@ import { ProviderDiagnostics } from "./ProviderDiagnostics";
 import { SignalCard } from "./SignalCard";
 import { useLanguage } from "../context/LanguageContext";
 import { formatNumber, riskLabel, aiMetricCaption, reportSummaryText, aiVerdictLabel, uncertaintyBand } from "../utils/reportLabels";
+import { translateReportSummary, translateScanNote } from "../utils/reportI18n";
 
 interface ReportViewProps {
   report: ScanReport;
@@ -38,7 +39,7 @@ export function ReportView({ report, llmBusy, reportRef, onRetryOpinion }: Repor
             {report.fileName}
           </h2>
           <p className="text-body-md text-on-surface-variant mt-2 leading-relaxed max-w-3xl">
-            {reportSummaryText(report, lang)}
+            {translateReportSummary(reportSummaryText(report, lang), lang)}
           </p>
         </div>
         <div className="flex flex-col lg:items-end gap-3 shrink-0">
@@ -102,7 +103,7 @@ export function ReportView({ report, llmBusy, reportRef, onRetryOpinion }: Repor
             </strong>
           ) : null}
           {report.scanNotes.map((note) => (
-            <span key={note}>{note}</span>
+            <span key={note}>{translateScanNote(note, lang)}</span>
           ))}
         </div>
       ) : null}

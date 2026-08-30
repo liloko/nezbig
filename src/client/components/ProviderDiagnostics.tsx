@@ -1,34 +1,44 @@
 import type { ScanReport } from "../../shared/types";
 import { ProviderIcon } from "./ProviderIcon";
+import { useLanguage, type Language } from "../context/LanguageContext";
 
-function providerDiagnosticLabel(provider: NonNullable<ScanReport["searchDiagnostics"]>["providers"][number]): string {
-  if (provider.attempted === 0) return provider.skippedReason?.startsWith("не налаштовано") ? "не підключено" : "пропущено";
-  if (provider.succeeded === 0) return "недоступний";
-  return `${provider.succeeded}/${provider.attempted} · ${provider.results} рез.`;
+function providerDiagnosticLabel(provider: NonNullable<ScanReport["searchDiagnostics"]>["providers"][number], lang: Language): string {
+  if (provider.attempted === 0) {
+    if (provider.skippedReason?.startsWith("не налаштовано") || provider.skippedReason?.includes("not configured")) {
+      return lang === "uk" ? "не підключено" : "not connected";
+    }
+    return lang === "uk" ? "пропущено" : "skipped";
+  }
+  if (provider.succeeded === 0) return lang === "uk" ? "недоступний" : "unavailable";
+  const resWord = lang === "uk" ? "рез." : "res.";
+  return `${provider.succeeded}/${provider.attempted} · ${provider.results} ${resWord}`;
 }
 
 export function ProviderDiagnostics({ diagnostics }: { diagnostics: ScanReport["searchDiagnostics"] }) {
+  const { lang } = useLanguage();
   if (!diagnostics) return null;
 
   return (
-    <div className="provider-health" aria-label="Стан пошукових провайдерів">
+    <div className="provider-health" aria-label={lang === "uk" ? "Стан пошукових провайдерів" : "Search provider diagnostics"}>
       {diagnostics.providers.map((provider) => (
         <span
           className={provider.succeeded === 0 ? "provider-health-issue" : ""}
           key={provider.provider}
-          title={provider.skippedReason ?? `${provider.failed} помилок, ${provider.timedOut} timeout`}
+          title={provider.skippedReason ?? `${provider.failed} errors, ${provider.timedOut} timeout`}
         >
           <div className="provider-health-metric">
             <strong>
               <ProviderIcon provider={provider.provider} /> {provider.provider}
             </strong>
-            {providerDiagnosticLabel(provider)}
+            {providerDiagnosticLabel(provider, lang)}
           </div>
         </span>
       ))}
-      <span title="Сторінки, текст яких сервер зміг прочитати для підтвердження збігу">
-        <strong>Сторінки</strong>
-        {diagnostics.pages.verified} підтвердж. · {diagnostics.pages.unavailable} недоступ.
+      <span title={lang === "uk" ? "Сторінки, текст яких сервер зміг прочитати для підтвердження збігу" : "Pages fetched and verified in full"}>
+        <strong>{lang === "uk" ? "Сторінки" : "Pages"}</strong>
+        {lang === "uk"
+          ? `${diagnostics.pages.verified} підтвердж. · ${diagnostics.pages.unavailable} недоступ.`
+          : `${diagnostics.pages.verified} verified · ${diagnostics.pages.unavailable} unavailable`}
       </span>
     </div>
   );

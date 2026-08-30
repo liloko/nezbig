@@ -1,6 +1,7 @@
 import type { HumanizeResult } from "../../shared/types";
 import { htmlFromPlainText, sanitizeRichHtml } from "../richText";
 import { formatNumber } from "../utils/reportLabels";
+import { useLanguage } from "../context/LanguageContext";
 
 interface HumanizePanelProps {
   humanized: HumanizeResult;
@@ -19,8 +20,12 @@ export function HumanizePanel({
   onCopyFormatted,
   onDownloadForWord
 }: HumanizePanelProps) {
+  const { lang, t } = useLanguage();
+
   const modeLabel =
-    humanized.mode === "natural" ? "Природний стиль" : humanized.mode === "concise" ? "Лаконічний стиль" : "Академічний стиль";
+    lang === "uk"
+      ? humanized.mode === "natural" ? "Природний стиль" : humanized.mode === "concise" ? "Лаконічний стиль" : "Академічний стиль"
+      : humanized.mode === "natural" ? "Natural Style" : humanized.mode === "concise" ? "Concise Style" : "Academic Style";
 
   const aiDrop =
     humanized.aiScoreBefore !== undefined && humanized.aiScoreAfter !== undefined
@@ -33,16 +38,18 @@ export function HumanizePanel({
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-6 pb-6 border-b border-white/10">
         <div className="flex flex-col gap-1">
           <div className="flex items-center gap-3">
-            <span className="font-label-sm text-label-sm text-emerald-glow tracking-wider uppercase">Олюднений текст</span>
+            <span className="font-label-sm text-label-sm text-emerald-glow tracking-wider uppercase">
+              {lang === "uk" ? "Олюднений текст" : "Humanized Output"}
+            </span>
             <span className="px-2.5 py-0.5 rounded-full bg-emerald-glow/10 border border-emerald-glow/30 text-emerald-glow text-label-sm font-medium">
               {modeLabel}
             </span>
           </div>
           <h2 id="humanizer-title" className="font-headline-md text-headline-md text-white font-bold">
-            Результат стильового редагування
+            {lang === "uk" ? "Результат стильового редагування" : "Stylistic Humanization Results"}
           </h2>
           <p className="text-body-md text-on-surface-variant">
-            Обсяг: {formatNumber(humanized.originalWordCount)} → {formatNumber(humanized.revisedWordCount)} слів
+            {lang === "uk" ? "Обсяг:" : "Length:"} {formatNumber(humanized.originalWordCount, lang)} → {formatNumber(humanized.revisedWordCount, lang)} {t("wordsCount")}
           </p>
         </div>
 
@@ -50,12 +57,12 @@ export function HumanizePanel({
         {humanized.aiScoreBefore !== undefined && humanized.aiScoreAfter !== undefined && (
           <div className="flex items-center gap-4 bg-surface-container-high/80 border border-emerald-glow/30 rounded-xl p-4 shrink-0 shadow-lg">
             <div className="flex flex-col items-center">
-              <span className="text-label-sm text-on-surface-variant">ШІ до</span>
+              <span className="text-label-sm text-on-surface-variant">{lang === "uk" ? "ШІ до" : "AI Before"}</span>
               <span className="text-body-lg font-bold text-rose-400">{humanized.aiScoreBefore}%</span>
             </div>
             <span className="material-symbols-outlined text-emerald-glow text-xl">arrow_forward</span>
             <div className="flex flex-col items-center">
-              <span className="text-label-sm text-on-surface-variant">ШІ після</span>
+              <span className="text-label-sm text-on-surface-variant">{lang === "uk" ? "ШІ після" : "AI After"}</span>
               <span className="text-headline-sm font-bold text-emerald-glow">{humanized.aiScoreAfter}%</span>
             </div>
             {aiDrop !== null && aiDrop > 0 && (
@@ -83,7 +90,7 @@ export function HumanizePanel({
           onClick={onMoveToChecker}
         >
           <span className="material-symbols-outlined text-lg">check_circle</span>
-          <span>Перенести в перевірку</span>
+          <span>{lang === "uk" ? "Перенести в перевірку" : "Run Plagiarism Scan"}</span>
         </button>
 
         <button
@@ -92,7 +99,7 @@ export function HumanizePanel({
           onClick={onCopyFormatted}
         >
           <span className="material-symbols-outlined text-lg">content_copy</span>
-          <span>Копіювати текст</span>
+          <span>{lang === "uk" ? "Копіювати текст" : "Copy Output"}</span>
         </button>
 
         <button
@@ -102,11 +109,17 @@ export function HumanizePanel({
           onClick={onDownloadForWord}
         >
           <span className="material-symbols-outlined text-lg">download</span>
-          <span>{wordDownloadBusy ? "Збираю DOCX…" : selectedFile && /\.docx$/i.test(selectedFile.name) ? "Завантажити DOCX" : "Завантажити для Word"}</span>
+          <span>
+            {wordDownloadBusy
+              ? (lang === "uk" ? "Збираю DOCX…" : "Building DOCX…")
+              : selectedFile && /\.docx$/i.test(selectedFile.name)
+                ? (lang === "uk" ? "Завантажити DOCX" : "Download DOCX")
+                : (lang === "uk" ? "Завантажити для Word" : "Download for Word")}
+          </span>
         </button>
 
         <span className="text-label-sm text-on-surface-variant ml-auto">
-          Збережіть файл або перенесіть у перевірку для детального аналізу.
+          {lang === "uk" ? "Збережіть файл або перенесіть у перевірку для детального аналізу." : "Save the output or transfer to scan for originality."}
         </span>
       </div>
 
@@ -115,10 +128,12 @@ export function HumanizePanel({
         <div className="flex flex-col gap-3">
           <h3 className="font-headline-sm text-body-lg text-white font-bold flex items-center gap-2">
             <span className="material-symbols-outlined text-emerald-glow text-xl">auto_fix</span>
-            <span>Застосовані покращення ({humanized.changes.length})</span>
+            <span>{lang === "uk" ? `Застосовані покращення (${humanized.changes.length})` : `Applied Enhancements (${humanized.changes.length})`}</span>
           </h3>
           {humanized.changes.length === 0 ? (
-            <p className="text-body-md text-on-surface-variant/80 italic">Помітних AI-шаблонів не виявлено, текст зберіг авторський вигляд.</p>
+            <p className="text-body-md text-on-surface-variant/80 italic">
+              {lang === "uk" ? "Помітних AI-шаблонів не виявлено, текст зберіг авторський вигляд." : "No significant AI patterns detected; original style preserved."}
+            </p>
           ) : (
             <ul className="flex flex-col gap-2.5">
               {humanized.changes.map((change) => (
@@ -139,7 +154,7 @@ export function HumanizePanel({
         <div className="flex flex-col gap-3">
           <h3 className="font-headline-sm text-body-lg text-white font-bold flex items-center gap-2">
             <span className="material-symbols-outlined text-emerald-glow text-xl">info</span>
-            <span>Примітки та рекомендації</span>
+            <span>{lang === "uk" ? "Примітки та рекомендації" : "Notes & Recommendations"}</span>
           </h3>
           <ul className="flex flex-col gap-2.5">
             {humanized.notes.map((note, index) => (
