@@ -1,5 +1,5 @@
 import type { ScanReport } from "../../shared/types";
-import { downloadReportPng } from "../utils/reportExport";
+import { downloadReportPdf, downloadReportPng } from "../utils/reportExport";
 
 interface ExportToolbarProps {
   report: ScanReport;
@@ -16,7 +16,7 @@ export function ExportToolbar({ report }: ExportToolbarProps) {
 
   return (
     <div style={{ display: "flex", gap: "8px" }}>
-      <button className="secondary-button" type="button" onClick={() => window.print()} style={{ display: "flex", alignItems: "center", gap: "6px" }}>
+      <button className="secondary-button" type="button" onClick={() => downloadReportPdf(report)} style={{ display: "flex", alignItems: "center", gap: "6px" }}>
         {downloadIcon}
         PDF
       </button>
@@ -29,7 +29,8 @@ export function ExportToolbar({ report }: ExportToolbarProps) {
         const url = URL.createObjectURL(blob);
         const a = document.createElement("a");
         a.href = url;
-        a.download = `${report.fileName.replace(/[^a-z0-9а-яіїєґ]/gi, "_")}_report.json`;
+        const safeName = report.fileName.replace(/[^a-z0-9а-яіїєґ]/gi, "_");
+        a.download = `${safeName}_report.json`;
         a.click();
         URL.revokeObjectURL(url);
       }} style={{ display: "flex", alignItems: "center", gap: "6px" }}>
