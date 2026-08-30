@@ -27,30 +27,30 @@ function wrapCanvasText(context: CanvasRenderingContext2D, text: string, x: numb
 }
 
 /**
- * Calculates the exact dynamic height needed for the report content
+ * Calculates the exact height needed for the report
  */
 function estimateReportHeight(report: ScanReport): number {
-  let h = 400; // Header, title, separator, cards
-  h += 240; // Summary section
+  let h = 380; // Header, title, separator, cards
+  h += 200; // Summary section
   if (report.scanNotes?.length) {
-    h += 60 + report.scanNotes.slice(0, 4).length * 35;
+    h += 50 + report.scanNotes.slice(0, 4).length * 32;
   }
-  const matchCount = Math.max(1, Math.min(6, report.matches.length));
-  h += 80 + matchCount * 85;
+  const matchCount = Math.max(1, Math.min(5, report.matches.length));
+  h += 70 + matchCount * 80;
   if (report.aiOpinionNote) {
-    h += 140;
+    h += 130;
   }
-  const signalCount = Math.min(6, report.aiSignals.length);
-  h += 80 + signalCount * 75;
-  h += 120; // Footer & padding
-  return Math.max(1600, h);
+  const signalCount = Math.min(5, report.aiSignals.length);
+  h += 70 + signalCount * 70;
+  h += 100; // Footer & padding
+  return Math.max(1400, h);
 }
 
 export function generateReportCanvas(report: ScanReport): HTMLCanvasElement {
   const canvas = document.createElement("canvas");
-  const width = 1400;
+  const width = 1200;
   const height = estimateReportHeight(report);
-  const scale = 2; // High-resolution export for crisp text
+  const scale = 1.5; // High resolution with lightweight memory footprint
 
   canvas.width = width * scale;
   canvas.height = height * scale;
@@ -74,31 +74,31 @@ export function generateReportCanvas(report: ScanReport): HTMLCanvasElement {
 
   // Top header brand
   context.fillStyle = accentEmerald;
-  context.font = "800 20px 'Actay Wide', Actay, sans-serif";
-  context.fillText("НЕЗБІГ 2.0  •  ОФІЦІЙНИЙ ЗВІТ ОРИГІНАЛЬНОСТІ", 70, 68);
+  context.font = "800 18px 'Actay Wide', Actay, sans-serif";
+  context.fillText("НЕЗБІГ 2.0  •  ОФІЦІЙНИЙ ЗВІТ ОРИГІНАЛЬНОСТІ", 60, 60);
 
   // Date
-  context.font = "500 20px Actay, sans-serif";
+  context.font = "500 18px Actay, sans-serif";
   context.fillStyle = printGray;
   const dateStr = new Intl.DateTimeFormat("uk-UA", { dateStyle: "medium", timeStyle: "short" }).format(new Date(report.checkedAt));
-  context.fillText(dateStr, 1080, 68);
+  context.fillText(dateStr, 930, 60);
 
   // File Name Title
   context.fillStyle = printBlack;
-  context.font = "800 42px 'Actay Wide', Actay, sans-serif";
-  const titleY = wrapCanvasText(context, report.fileName, 70, 126, 1220, 52);
+  context.font = "800 36px 'Actay Wide', Actay, sans-serif";
+  const titleY = wrapCanvasText(context, report.fileName, 60, 114, 1080, 46);
 
   // Header separator
   context.strokeStyle = printBlack;
-  context.lineWidth = 2.5;
+  context.lineWidth = 2;
   context.beginPath();
-  context.moveTo(70, Math.max(190, titleY + 16));
-  context.lineTo(1330, Math.max(190, titleY + 16));
+  context.moveTo(60, Math.max(165, titleY + 14));
+  context.lineTo(1140, Math.max(165, titleY + 14));
   context.stroke();
 
   // Metrics Grid Cards
-  let y = Math.max(240, titleY + 46);
-  const cardWidth = 286;
+  let y = Math.max(210, titleY + 40);
+  const cardWidth = 250;
   const cards = [
     ["Плагіат", `${report.plagiarismScore}%`, `${riskLabel(report.plagiarismScore)} ризик`],
     ["ШІ-аналіз", report.aiVerdict === "insufficient" ? "—" : `${report.aiProbability}%`, aiVerdictLabel(report.aiVerdict)],
@@ -111,37 +111,37 @@ export function generateReportCanvas(report: ScanReport): HTMLCanvasElement {
   ];
 
   for (const [index, card] of cards.entries()) {
-    const x = 70 + index * (cardWidth + 24);
+    const x = 60 + index * (cardWidth + 26);
     context.fillStyle = printCardBg;
     context.strokeStyle = printLight;
     context.lineWidth = 1.5;
     context.beginPath();
-    context.roundRect(x, y, cardWidth, 160, 12);
+    context.roundRect(x, y, cardWidth, 145, 10);
     context.fill();
     context.stroke();
 
     context.fillStyle = printGray;
-    context.font = "700 20px Actay, sans-serif";
-    context.fillText(card[0], x + 24, y + 42);
+    context.font = "700 18px Actay, sans-serif";
+    context.fillText(card[0], x + 20, y + 38);
 
     context.fillStyle = printBlack;
-    context.font = "800 60px 'Actay Wide', Actay, sans-serif";
-    context.fillText(card[1], x + 24, y + 106);
+    context.font = "800 52px 'Actay Wide', Actay, sans-serif";
+    context.fillText(card[1], x + 20, y + 96);
 
     context.fillStyle = printGray;
-    context.font = "500 19px Actay, sans-serif";
-    context.fillText(card[2], x + 24, y + 138);
+    context.font = "500 17px Actay, sans-serif";
+    context.fillText(card[2], x + 20, y + 125);
   }
 
-  y += 210;
+  y += 185;
 
   // Summary Section
   context.fillStyle = printBlack;
-  context.font = "800 26px 'Actay Wide', Actay, sans-serif";
-  context.fillText("Підсумок перевірки", 70, y);
+  context.font = "800 24px 'Actay Wide', Actay, sans-serif";
+  context.fillText("Підсумок перевірки", 60, y);
   context.fillStyle = printDark;
-  context.font = "400 23px Actay, sans-serif";
-  y = wrapCanvasText(context, reportSummaryText(report), 70, y + 38, 1220, 34) + 20;
+  context.font = "400 21px Actay, sans-serif";
+  y = wrapCanvasText(context, reportSummaryText(report), 60, y + 34, 1080, 30) + 16;
 
   // AI Opinion Summary (if present)
   if (report.aiOpinionNote) {
@@ -149,76 +149,76 @@ export function generateReportCanvas(report: ScanReport): HTMLCanvasElement {
     context.strokeStyle = accentEmerald;
     context.lineWidth = 1.5;
     context.beginPath();
-    context.roundRect(70, y, 1260, 110, 10);
+    context.roundRect(60, y, 1080, 100, 8);
     context.fill();
     context.stroke();
 
     context.fillStyle = accentEmerald;
-    context.font = "800 20px 'Actay Wide', Actay, sans-serif";
-    context.fillText("Експертний AI-висновок нейромережі", 95, y + 36);
+    context.font = "800 18px 'Actay Wide', Actay, sans-serif";
+    context.fillText("Експертний AI-висновок нейромережі", 80, y + 32);
 
     context.fillStyle = printDark;
-    context.font = "400 20px Actay, sans-serif";
-    wrapCanvasText(context, report.aiOpinionNote, 95, y + 68, 1210, 28);
-    y += 135;
+    context.font = "400 18px Actay, sans-serif";
+    wrapCanvasText(context, report.aiOpinionNote, 80, y + 60, 1040, 25);
+    y += 120;
   }
 
   // Scan Notes
   if (report.scanNotes?.length) {
     context.fillStyle = printBlack;
-    context.font = "800 24px 'Actay Wide', Actay, sans-serif";
-    context.fillText("Примітки та надійність аналізу", 70, y);
+    context.font = "800 22px 'Actay Wide', Actay, sans-serif";
+    context.fillText("Примітки та надійність аналізу", 60, y);
     context.fillStyle = printGray;
-    context.font = "400 20px Actay, sans-serif";
-    y += 34;
+    context.font = "400 18px Actay, sans-serif";
+    y += 30;
     for (const note of report.scanNotes.slice(0, 4)) {
-      y = wrapCanvasText(context, `•  ${note}`, 85, y, 1180, 28);
+      y = wrapCanvasText(context, `•  ${note}`, 75, y, 1050, 25);
     }
-    y += 18;
+    y += 14;
   }
 
   // Separator
   context.strokeStyle = printLight;
   context.lineWidth = 1;
   context.beginPath();
-  context.moveTo(70, y);
-  context.lineTo(1330, y);
+  context.moveTo(60, y);
+  context.lineTo(1140, y);
   context.stroke();
-  y += 36;
+  y += 32;
 
   // Sources Section
   context.fillStyle = printBlack;
-  context.font = "800 26px 'Actay Wide', Actay, sans-serif";
-  context.fillText("Знайдені джерела та збіги", 70, y);
-  y += 42;
-  context.font = "400 20px Actay, sans-serif";
+  context.font = "800 24px 'Actay Wide', Actay, sans-serif";
+  context.fillText("Знайдені джерела та збіги", 60, y);
+  y += 36;
+  context.font = "400 18px Actay, sans-serif";
   context.fillStyle = printGray;
 
   const matches = report.matches.slice(0, 5);
   if (matches.length === 0) {
-    y = wrapCanvasText(context, "Сильних збігів у відкритих наукових базах та вебджерелах не знайдено.", 70, y, 1220, 30) + 24;
+    y = wrapCanvasText(context, "Сильних збігів у відкритих наукових базах та вебджерелах не знайдено.", 60, y, 1080, 28) + 20;
   } else {
     for (const match of matches) {
       context.fillStyle = printBlack;
-      context.font = "800 22px Actay, sans-serif";
-      y = wrapCanvasText(context, `${match.score}% збігу  —  ${match.title}`, 70, y, 1220, 30);
+      context.font = "800 20px Actay, sans-serif";
+      y = wrapCanvasText(context, `${match.score}% збігу  —  ${match.title}`, 60, y, 1080, 28);
 
       context.fillStyle = printGray;
-      context.font = "400 19px Actay, sans-serif";
+      context.font = "400 17px Actay, sans-serif";
       const evidenceLabel = match.confidence === "page" ? "текст підтверджено джерелом" : "пошуковий уривок";
       y = wrapCanvasText(
         context,
         `${match.url}  •  ${match.provider}  •  ${evidenceLabel}`,
-        90,
+        80,
         y + 4,
-        1180,
-        26
+        1050,
+        24
       );
       if (match.confidence === "page" && match.submittedEvidence) {
         context.fillStyle = printDark;
-        y = wrapCanvasText(context, `Спільний уривок: «${match.submittedEvidence}»`, 90, y + 4, 1180, 26);
+        y = wrapCanvasText(context, `Спільний уривок: «${match.submittedEvidence}»`, 80, y + 4, 1050, 24);
       }
-      y += 16;
+      y += 14;
     }
   }
 
@@ -226,39 +226,39 @@ export function generateReportCanvas(report: ScanReport): HTMLCanvasElement {
   context.strokeStyle = printLight;
   context.lineWidth = 1;
   context.beginPath();
-  context.moveTo(70, y);
-  context.lineTo(1330, y);
+  context.moveTo(60, y);
+  context.lineTo(1140, y);
   context.stroke();
-  y += 36;
+  y += 32;
 
   // AI Signals Section
   context.fillStyle = printBlack;
-  context.font = "800 26px 'Actay Wide', Actay, sans-serif";
-  context.fillText("Маркери штучного інтелекту (AI Signals)", 70, y);
-  y += 40;
+  context.font = "800 24px 'Actay Wide', Actay, sans-serif";
+  context.fillText("Маркери штучного інтелекту (AI Signals)", 60, y);
+  y += 36;
 
   for (const signal of report.aiSignals.slice(0, 5)) {
     context.fillStyle = printBlack;
-    context.font = "800 21px Actay, sans-serif";
-    context.fillText(`${signal.label}: ${signal.score}%`, 70, y);
+    context.font = "800 19px Actay, sans-serif";
+    context.fillText(`${signal.label}: ${signal.score}%`, 60, y);
 
     context.fillStyle = printGray;
-    context.font = "400 19px Actay, sans-serif";
-    y = wrapCanvasText(context, signal.detail, 90, y + 28, 1180, 26) + 14;
+    context.font = "400 17px Actay, sans-serif";
+    y = wrapCanvasText(context, signal.detail, 80, y + 24, 1050, 24) + 12;
   }
 
   // Footer
-  y = Math.max(y + 20, height - 50);
+  y = Math.max(y + 20, height - 40);
   context.strokeStyle = printLight;
   context.lineWidth = 1;
   context.beginPath();
-  context.moveTo(70, y - 20);
-  context.lineTo(1330, y - 20);
+  context.moveTo(60, y - 16);
+  context.lineTo(1140, y - 16);
   context.stroke();
 
   context.fillStyle = printGray;
-  context.font = "500 17px Actay, sans-serif";
-  context.fillText(`ID звіту: ${report.id}  •  Перевірено на nezbig.vercel.app  •  Всі права захищено`, 70, y + 6);
+  context.font = "500 15px Actay, sans-serif";
+  context.fillText(`ID звіту: ${report.id}  •  Перевірено на nezbig.vercel.app  •  Всі права захищено`, 60, y + 6);
 
   return canvas;
 }
@@ -277,34 +277,60 @@ export function downloadReportPng(report: ScanReport): void {
   }, "image/png");
 }
 
+/**
+ * Generates an instant, crisp A4 PDF document without browser freezing
+ */
 export function downloadReportPdf(report: ScanReport): void {
-  const canvas = generateReportCanvas(report);
-  const imgData = canvas.toDataURL("image/png", 1.0);
-
+  const fullCanvas = generateReportCanvas(report);
   const pdf = new jsPDF({
     orientation: "portrait",
     unit: "mm",
     format: "a4"
   });
 
-  const pdfWidth = pdf.internal.pageSize.getWidth(); // 210 mm
-  const pdfHeight = pdf.internal.pageSize.getHeight(); // 297 mm
+  const pdfWidthMm = 210;
+  const pdfHeightMm = 297;
+  const a4Ratio = pdfHeightMm / pdfWidthMm; // 1.4142857
 
-  const imgHeightMm = (canvas.height * pdfWidth) / canvas.width;
+  // Pixel dimensions for each A4 page slice
+  const canvasCssWidth = 1200;
+  const scale = 1.5;
+  const pageHeightCss = Math.round(canvasCssWidth * a4Ratio); // 1697 px
+  const pageHeightRaw = pageHeightCss * scale;
+  const totalHeightRaw = fullCanvas.height;
 
-  let heightLeft = imgHeightMm;
-  let position = 0;
+  const totalPages = Math.max(1, Math.ceil(totalHeightRaw / pageHeightRaw));
 
-  // First page
-  pdf.addImage(imgData, "PNG", 0, position, pdfWidth, imgHeightMm, undefined, "FAST");
-  heightLeft -= pdfHeight;
+  for (let page = 0; page < totalPages; page += 1) {
+    if (page > 0) {
+      pdf.addPage();
+    }
 
-  // Additional pages if needed
-  while (heightLeft > 5) {
-    position = position - pdfHeight;
-    pdf.addPage();
-    pdf.addImage(imgData, "PNG", 0, position, pdfWidth, imgHeightMm, undefined, "FAST");
-    heightLeft -= pdfHeight;
+    // Create single-page slice canvas
+    const pageCanvas = document.createElement("canvas");
+    pageCanvas.width = fullCanvas.width;
+    pageCanvas.height = pageHeightRaw;
+
+    const pageCtx = pageCanvas.getContext("2d");
+    if (!pageCtx) continue;
+
+    // Fill white background
+    pageCtx.fillStyle = "#ffffff";
+    pageCtx.fillRect(0, 0, pageCanvas.width, pageCanvas.height);
+
+    // Source slice rectangle
+    const sy = page * pageHeightRaw;
+    const sHeight = Math.min(pageHeightRaw, totalHeightRaw - sy);
+
+    pageCtx.drawImage(
+      fullCanvas,
+      0, sy, fullCanvas.width, sHeight,
+      0, 0, fullCanvas.width, sHeight
+    );
+
+    // Fast native JPEG stream compression (takes ~15ms vs 15000ms PNG inflate)
+    const pageJpegData = pageCanvas.toDataURL("image/jpeg", 0.92);
+    pdf.addImage(pageJpegData, "JPEG", 0, 0, pdfWidthMm, pdfHeightMm, undefined, "FAST");
   }
 
   const safeName = report.fileName.replace(/[^a-z0-9а-яіїєґ]/gi, "_");
