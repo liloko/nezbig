@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useState, useEffect } from "react";
+import React, { createContext, useContext, useState } from "react";
 
 export type Language = "uk" | "en";
 
@@ -31,9 +31,14 @@ export const translations = {
     wordsCount: "слів",
     charsCount: "символів",
     scanSettings: "Налаштування перевірки",
-    fastMode: "Швидкий",
-    deepMode: "Глибокий",
+    fastMode: "Швидко",
+    deepMode: "Глибоко",
+    expertMode: "Експертно",
     academicSources: "Наукові бази (Crossref, OpenAlex)",
+    chunkSize: "Розмір фрагмента",
+    estTime: "Орієнтовно",
+    overlap: "Перекриття",
+    addTextFirst: "після додавання тексту",
     
     // Humanizer
     humanizeTitle: "Олюднення тексту",
@@ -51,7 +56,7 @@ export const translations = {
     copied: "Скопійовано!",
 
     // Report
-    reportTitle: "Звіт оригінальності",
+    reportTitle: "Звіт Незбіг",
     plagiarism: "Плагіат",
     aiAnalysis: "ШІ-аналіз",
     aiOpinion: "AI-думка",
@@ -67,6 +72,10 @@ export const translations = {
     lowRisk: "Низький",
     moderateRisk: "Помірний",
     highRisk: "Високий",
+    risk: "ризик",
+    levelFromModel: "рівень від моделі",
+    modelThinking: "модель ще думає",
+    noModelResponse: "немає відповіді моделі",
 
     // Footer & Modals
     aboutUs: "Про нас",
@@ -97,9 +106,14 @@ export const translations = {
     wordsCount: "words",
     charsCount: "characters",
     scanSettings: "Scan Settings",
-    fastMode: "Standard",
-    deepMode: "Deep Scan",
+    fastMode: "Standard Fast",
+    deepMode: "Deep Analysis",
+    expertMode: "Expert Scan",
     academicSources: "Scholarly databases (Crossref, OpenAlex)",
+    chunkSize: "Chunk Size",
+    estTime: "Est. Time",
+    overlap: "Overlap",
+    addTextFirst: "add text first",
 
     // Humanizer
     humanizeTitle: "AI Text Humanizer",
@@ -117,7 +131,7 @@ export const translations = {
     copied: "Copied!",
 
     // Report
-    reportTitle: "Originality Report",
+    reportTitle: "Nezbig Report",
     plagiarism: "Plagiarism",
     aiAnalysis: "AI Detection",
     aiOpinion: "AI Opinion",
@@ -133,6 +147,10 @@ export const translations = {
     lowRisk: "Low",
     moderateRisk: "Moderate",
     highRisk: "High",
+    risk: "risk",
+    levelFromModel: "level from model",
+    modelThinking: "AI model thinking...",
+    noModelResponse: "no model response",
 
     // Footer & Modals
     aboutUs: "About",
@@ -146,16 +164,17 @@ export const translations = {
 export type TranslationKey = keyof typeof translations.uk;
 
 const LanguageContext = createContext<LanguageContextType>({
-  lang: "uk",
+  lang: "en",
   setLang: () => {},
-  t: (key) => translations.uk[key] || key
+  t: (key) => translations.en[key] || key
 });
 
 export const LanguageProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [lang, setLangState] = useState<Language>(() => {
     const saved = localStorage.getItem("nezbig_lang") as Language;
     if (saved === "uk" || saved === "en") return saved;
-    return "uk";
+    // Default to EN for international moderation / global users
+    return "en";
   });
 
   const setLang = (newLang: Language) => {
@@ -164,7 +183,7 @@ export const LanguageProvider: React.FC<{ children: React.ReactNode }> = ({ chil
   };
 
   const t = (key: TranslationKey): string => {
-    return translations[lang][key] || translations.uk[key] || key;
+    return translations[lang][key] || translations.en[key] || key;
   };
 
   return (

@@ -1,15 +1,8 @@
 import type { ScanReport } from "../../shared/types";
 import { ProviderIcon } from "./ProviderIcon";
 import { stripHtml } from "../utils/sanitizeHtml";
-
-function formatNumber(value: number): string {
-  return new Intl.NumberFormat("uk-UA").format(value);
-}
-
-function confidenceLabel(value: "snippet" | "page"): string {
-  return value === "page" ? "сторінку прочитано" : "лише уривок пошуку";
-}
-
+import { useLanguage } from "../context/LanguageContext";
+import { formatNumber } from "../utils/reportLabels";
 import type { ReactNode } from "react";
 
 interface PlagiarismMatchesProps {
@@ -27,18 +20,35 @@ export function PlagiarismMatches({
   allSearchProvidersFailed,
   diagnosticsNode
 }: PlagiarismMatchesProps) {
+  const { lang, t } = useLanguage();
+
+  function confidenceLabel(value: "snippet" | "page"): string {
+    if (lang === "uk") {
+      return value === "page" ? "сторінку прочитано" : "лише уривок пошуку";
+    }
+    return value === "page" ? "full page verified" : "search snippet only";
+  }
+
   return (
     <section className="source-panel" aria-labelledby="matches-title">
       <div className="section-heading-row">
-        <h3 id="matches-title">Ймовірні джерела</h3>
-        <span>{matches.length ? `${formatNumber(confirmedMatchCount)} підтвердж. · ${formatNumber(leadMatchCount)} підказ.` : "0 збігів"}</span>
+        <h3 id="matches-title">{t("foundSources")}</h3>
+        <span>
+          {matches.length
+            ? lang === "uk"
+              ? `${formatNumber(confirmedMatchCount, lang)} підтвердж. · ${formatNumber(leadMatchCount, lang)} підказ.`
+              : `${formatNumber(confirmedMatchCount, lang)} verified · ${formatNumber(leadMatchCount, lang)} leads`
+            : lang === "uk" ? "0 збігів" : "0 matches"}
+        </span>
       </div>
       {diagnosticsNode}
       {matches.length === 0 ? (
         <p className={`empty-state compact-empty${allSearchProvidersFailed ? " search-failed-state" : ""}`}>
           {allSearchProvidersFailed
-            ? "Вебпошук не завершено: доступні індекси не відповіли. Відсутність збігів не підтверджена."
-            : "Сильних збігів у відкритих вебджерелах не знайдено."}
+            ? lang === "uk"
+              ? "Вебпошук не завершено: доступні індекси не відповіли. Відсутність збігів не підтверджена."
+              : "Web search incomplete: indexes did not respond. Zero matches not confirmed."
+            : t("noMatchesFound")}
         </p>
       ) : (
         <div className="match-list">
@@ -46,7 +56,7 @@ export function PlagiarismMatches({
             <article className="match-card" key={`${match.url}-${match.chunkIndex}`}>
               <div className="match-score">
                 <strong>{match.score}%</strong>
-                <span>Фрагмент {match.chunkIndex + 1}</span>
+                <span>{lang === "uk" ? "Фрагмент" : "Chunk"} {match.chunkIndex + 1}</span>
               </div>
               <h4>
                 <a href={match.url} target="_blank" rel="noreferrer">
@@ -56,25 +66,29 @@ export function PlagiarismMatches({
               <p>{stripHtml(match.snippet)}</p>
               {match.confidence === "page" && match.submittedEvidence ? (
                 <div className="match-evidence">
-                  <strong>Підтверджений спільний уривок</strong>
+                  <strong>{lang === "uk" ? "Підтверджений спільний уривок" : "Verified Matching Excerpt"}</strong>
                   <blockquote>{match.submittedEvidence}</blockquote>
                   {match.sourceEvidence && match.sourceEvidence !== match.submittedEvidence ? <blockquote>{match.sourceEvidence}</blockquote> : null}
                 </div>
               ) : (
-                <p className="match-lead-note">Пошукова підказка: сторінку ще не підтверджено, тому цей результат не впливає на загальний відсоток плагіату.</p>
+                <p className="match-lead-note">
+                  {lang === "uk"
+                    ? "Пошукова підказка: сторінку ще не підтверджено, тому цей результат не впливає на загальний відсоток плагіату."
+                    : "Search lead: page content not fully verified yet; does not inflate overall plagiarism score."}
+                </p>
               )}
               <dl>
                 <div>
-                  <dt>Слова</dt>
+                  <dt>{lang === "uk" ? "Слова" : "Words"}</dt>
                   <dd>{match.overlapPercent}%</dd>
                 </div>
                 <div>
-                  <dt>N-грам</dt>
+                  <dt>{lang === "uk" ? "N-грам" : "N-grams"}</dt>
                   <dd>{match.ngramOverlapPercent}%</dd>
                 </div>
                 <div>
-                  <dt>Довгий збіг</dt>
-                  <dd>{match.longestRun} слів</dd>
+                  <dt>{lang === "uk" ? "Довгий збіг" : "Longest Run"}</dt>
+                  <dd>{match.longestRun} {t("wordsCount")}</dd>
                 </div>
                 <div>
                   <dt>Winnowing</dt>
@@ -85,11 +99,11 @@ export function PlagiarismMatches({
                   <dd>{match.fullTextRank}%</dd>
                 </div>
                 <div>
-                  <dt>Доказ</dt>
+                  <dt>{lang === "uk" ? "Доказ" : "Evidence"}</dt>
                   <dd>{confidenceLabel(match.confidence)}</dd>
                 </div>
                 <div>
-                  <dt>Джерело:</dt>
+                  <dt>{lang === "uk" ? "Джерело:" : "Source:"}</dt>
                   <dd>
                     <ProviderIcon provider={match.provider ?? ""} /> {match.provider ?? "Web"}
                   </dd>

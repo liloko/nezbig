@@ -5,6 +5,7 @@ import { SuspiciousSegments } from "./SuspiciousSegments";
 import { PlagiarismMatches } from "./PlagiarismMatches";
 import { ProviderDiagnostics } from "./ProviderDiagnostics";
 import { SignalCard } from "./SignalCard";
+import { useLanguage } from "../context/LanguageContext";
 import { formatNumber, riskLabel, aiMetricCaption, reportSummaryText, aiVerdictLabel, uncertaintyBand } from "../utils/reportLabels";
 
 interface ReportViewProps {
@@ -15,6 +16,7 @@ interface ReportViewProps {
 }
 
 export function ReportView({ report, llmBusy, reportRef, onRetryOpinion }: ReportViewProps) {
+  const { lang, t } = useLanguage();
   const confirmedMatchCount = report.matches.filter((match) => match.confidence === "page").length;
   const leadMatchCount = report.matches.length - confirmedMatchCount;
   const searchAttemptCount = report.searchDiagnostics?.providers.reduce((sum, provider) => sum + provider.attempted, 0) ?? 0;
@@ -29,17 +31,19 @@ export function ReportView({ report, llmBusy, reportRef, onRetryOpinion }: Repor
     <section ref={reportRef} className="report" aria-labelledby="report-title">
       <div className="flex flex-col lg:flex-row lg:items-start justify-between gap-6 pb-6 border-b border-white/10">
         <div className="min-w-0 flex-1">
-          <p className="font-label-sm text-label-sm text-emerald-glow tracking-wider uppercase mb-1">Звіт Незбіг</p>
+          <p className="font-label-sm text-label-sm text-emerald-glow tracking-wider uppercase mb-1">
+            {lang === "uk" ? "Звіт Незбіг" : "Nezbig Report"}
+          </p>
           <h2 id="report-title" className="font-headline-lg text-headline-lg text-white font-bold break-all leading-tight">
             {report.fileName}
           </h2>
           <p className="text-body-md text-on-surface-variant mt-2 leading-relaxed max-w-3xl">
-            {reportSummaryText(report)}
+            {reportSummaryText(report, lang)}
           </p>
         </div>
         <div className="flex flex-col lg:items-end gap-3 shrink-0">
           <time className="text-label-sm text-on-surface-variant font-mono" dateTime={report.checkedAt}>
-            {new Intl.DateTimeFormat("uk-UA", { dateStyle: "medium", timeStyle: "short" }).format(new Date(report.checkedAt))}
+            {new Intl.DateTimeFormat(lang === "uk" ? "uk-UA" : "en-US", { dateStyle: "medium", timeStyle: "short" }).format(new Date(report.checkedAt))}
           </time>
           <div className="flex flex-wrap items-center gap-2">
             <button 
@@ -47,7 +51,7 @@ export function ReportView({ report, llmBusy, reportRef, onRetryOpinion }: Repor
               type="button" 
               onClick={() => navigator.clipboard.writeText(window.location.origin + "/history/" + report.id)}
             >
-              Копіювати посилання
+              {lang === "uk" ? "Копіювати посилання" : "Copy Link"}
             </button>
             <ExportToolbar report={report} />
           </div>
@@ -56,43 +60,47 @@ export function ReportView({ report, llmBusy, reportRef, onRetryOpinion }: Repor
 
       <div className="metrics">
         <article>
-          <span>Плагіат</span>
+          <span>{t("plagiarism")}</span>
           <strong>{report.plagiarismScore}%</strong>
-          <small>{riskLabel(report.plagiarismScore)} ризик</small>
+          <small>{riskLabel(report.plagiarismScore, lang)} {lang === "uk" ? "ризик" : "risk"}</small>
         </article>
         <article>
-          <span>ШІ-аналіз</span>
+          <span>{t("aiAnalysis")}</span>
           {report.aiVerdict === "insufficient" ? (
             <strong>—</strong>
           ) : (
             <>
               <strong>{report.aiProbability}%</strong>
-              <small className="uncertainty-band">±{uncertaintyBand(report)} п.п.</small>
+              <small className="uncertainty-band">±{uncertaintyBand(report)} {lang === "uk" ? "п.п." : "pts"}</small>
             </>
           )}
-          <small>{aiMetricCaption(report)}</small>
+          <small>{aiMetricCaption(report, lang)}</small>
         </article>
         <article>
-          <span>AI-думка</span>
+          <span>{t("aiOpinion")}</span>
           <strong>{report.aiOpinionProbability !== undefined ? `${report.aiOpinionProbability}%` : "…"}</strong>
           <small>
             {report.aiOpinionProbability !== undefined
-              ? `${riskLabel(report.aiOpinionProbability)} рівень від моделі`
+              ? `${riskLabel(report.aiOpinionProbability, lang)} ${t("levelFromModel")}`
               : llmBusy
-                ? "модель ще думає"
-                : "немає відповіді моделі"}
+                ? t("modelThinking")
+                : t("noModelResponse")}
           </small>
         </article>
         <article>
-          <span>Фрагменти</span>
-          <strong>{formatNumber(report.chunksChecked)}</strong>
-          <small>{formatNumber(report.wordCount)} слів</small>
+          <span>{t("fragments")}</span>
+          <strong>{formatNumber(report.chunksChecked, lang)}</strong>
+          <small>{formatNumber(report.wordCount, lang)} {t("wordsCount")}</small>
         </article>
       </div>
 
       {report.scanNotes && report.scanNotes.length > 0 ? (
-        <div className="scan-notes" aria-label="Примітки перевірки">
-          {report.skippedTitleWords ? <strong>Титулку пропущено: {formatNumber(report.skippedTitleWords)} слів</strong> : null}
+        <div className="scan-notes" aria-label={lang === "uk" ? "Примітки перевірки" : "Scan notes"}>
+          {report.skippedTitleWords ? (
+            <strong>
+              {lang === "uk" ? "Титулку пропущено:" : "Title page skipped:"} {formatNumber(report.skippedTitleWords, lang)} {t("wordsCount")}
+            </strong>
+          ) : null}
           {report.scanNotes.map((note) => (
             <span key={note}>{note}</span>
           ))}
@@ -112,7 +120,7 @@ export function ReportView({ report, llmBusy, reportRef, onRetryOpinion }: Repor
           <SuspiciousSegments segments={report.aiSuspiciousSegments} />
 
           {secondaryAiSignals.length > 0 ? (
-            <div className="signal-list signal-list-left" aria-label="Додаткові AI-сигнали">
+            <div className="signal-list signal-list-left" aria-label={lang === "uk" ? "Додаткові AI-сигнали" : "Additional AI Signals"}>
               {secondaryAiSignals.map((signal) => (
                 <SignalCard signal={signal} key={signal.label} />
               ))}

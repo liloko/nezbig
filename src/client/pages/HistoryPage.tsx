@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef } from "react";
 import { useAuth } from "../hooks/useAuth";
+import { useLanguage } from "../context/LanguageContext";
 import { AuthModal } from "../components/AuthModal";
 import { ReportView } from "../components/ReportView";
 import type { ScanReport } from "../../shared/types";
@@ -15,6 +16,7 @@ interface HistoryItem {
 
 export default function HistoryPage() {
   const { isLoggedIn, user } = useAuth();
+  const { lang, t } = useLanguage();
   const [items, setItems] = useState<HistoryItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [showAuth, setShowAuth] = useState(false);
@@ -80,9 +82,9 @@ export default function HistoryPage() {
         window.scrollTo({ top: 0, behavior: "smooth" });
         return;
       }
-      throw new Error("Не вдалося знайти звіт");
+      throw new Error("Report not found");
     } catch (e) {
-      alert("Не вдалося завантажити детальний звіт");
+      alert(lang === "uk" ? "Не вдалося завантажити детальний звіт" : "Failed to load scan report");
     } finally {
       setLoadingReport(false);
     }
@@ -92,15 +94,19 @@ export default function HistoryPage() {
     return (
       <div className="max-w-container-max mx-auto px-gutter py-12 flex flex-col items-center gap-8 relative z-10 fade-in">
         <span className="material-symbols-outlined text-7xl text-on-surface-variant/40">lock</span>
-        <h1 className="font-display-lg text-display-lg font-bold text-white text-center">Історія перевірок</h1>
+        <h1 className="font-display-lg text-display-lg font-bold text-white text-center">
+          {lang === "uk" ? "Історія перевірок" : "Scan History"}
+        </h1>
         <p className="text-body-lg text-on-surface-variant text-center max-w-md">
-          Увійдіть в акаунт, щоб бачити історію ваших перевірок. Усі звіти зберігаються автоматично.
+          {lang === "uk"
+            ? "Увійдіть в акаунт, щоб бачити історію ваших перевірок. Усі звіти зберігаються автоматично."
+            : "Sign in to view your scan history across devices. Reports are saved automatically."}
         </p>
         <button
           onClick={() => setShowAuth(true)}
           className="px-8 py-3 bg-gradient-to-br from-emerald-glow to-primary-container text-on-primary rounded-xl font-medium shadow-[0_8px_32px_rgba(42,187,167,0.3)] hover:-translate-y-1 transition-all"
         >
-          Увійти в акаунт
+          {lang === "uk" ? "Увійти в акаунт" : "Sign In to Account"}
         </button>
         <AuthModal open={showAuth} onClose={() => setShowAuth(false)} />
       </div>
@@ -110,8 +116,10 @@ export default function HistoryPage() {
   if (loading) {
     return (
       <div className="max-w-container-max mx-auto px-gutter py-12 flex flex-col items-center gap-6 relative z-10 fade-in">
-        <h1 className="font-display-lg text-display-lg font-bold text-white">Історія перевірок</h1>
-        <div className="text-on-surface-variant">Завантаження...</div>
+        <h1 className="font-display-lg text-display-lg font-bold text-white">
+          {lang === "uk" ? "Історія перевірок" : "Scan History"}
+        </h1>
+        <div className="text-on-surface-variant">{lang === "uk" ? "Завантаження..." : "Loading history..."}</div>
       </div>
     );
   }
@@ -124,7 +132,7 @@ export default function HistoryPage() {
           className="self-start flex items-center gap-2 text-emerald-glow hover:text-emerald-glow/80 font-medium transition-colors"
         >
           <span className="material-symbols-outlined">arrow_back</span>
-          Назад до списку перевірок
+          {lang === "uk" ? "Назад до списку перевірок" : "Back to History"}
         </button>
         <ReportView report={selectedReport} llmBusy={false} reportRef={reportRef} />
       </div>
@@ -143,7 +151,7 @@ export default function HistoryPage() {
   }
 
   function handleClearAll() {
-    if (window.confirm("Ви дійсно бажаєте очистити всю локальну історію перевірок?")) {
+    if (window.confirm(lang === "uk" ? "Ви дійсно бажаєте очистити всю локальну історію перевірок?" : "Are you sure you want to clear your local scan history?")) {
       setItems([]);
       try {
         localStorage.removeItem("nezbig_local_history");
@@ -157,35 +165,43 @@ export default function HistoryPage() {
     <div className="max-w-container-max mx-auto px-gutter py-8 md:py-12 flex flex-col gap-6 relative z-10 fade-in">
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="font-headline-lg text-headline-lg font-bold text-white">Історія перевірок</h1>
+          <h1 className="font-headline-lg text-headline-lg font-bold text-white">
+            {lang === "uk" ? "Історія перевірок" : "Scan History"}
+          </h1>
           <p className="text-label-sm text-on-surface-variant mt-1">
-            Зберігається локально у вашому браузері без навантаження на сервер
+            {lang === "uk" ? "Зберігається локально у вашому браузері" : "Saved locally in your browser storage"}
           </p>
         </div>
         <div className="flex items-center gap-4">
           <span className="text-label-sm text-on-surface-variant hidden sm:inline">
-            {items.length} {items.length === 1 ? "перевірка" : items.length < 5 ? "перевірки" : "перевірок"}
+            {items.length} {lang === "uk" ? (items.length === 1 ? "перевірка" : items.length < 5 ? "перевірки" : "перевірок") : (items.length === 1 ? "scan" : "scans")}
           </span>
           {items.length > 0 && (
             <button
               onClick={handleClearAll}
               className="text-label-sm text-on-surface-variant hover:text-error transition-colors px-3 py-1.5 rounded-lg border border-white/10 hover:border-error/30"
             >
-              Очистити все
+              {lang === "uk" ? "Очистити все" : "Clear All"}
             </button>
           )}
         </div>
       </div>
 
       {loadingReport && (
-        <div className="text-emerald-glow text-center py-4">Завантаження детального звіту...</div>
+        <div className="text-emerald-glow text-center py-4">
+          {lang === "uk" ? "Завантаження детального звіту..." : "Loading detailed report..."}
+        </div>
       )}
 
       {items.length === 0 ? (
         <div className="glass-panel rounded-xl p-12 border flex flex-col items-center gap-4">
           <span className="material-symbols-outlined text-5xl text-on-surface-variant/40">description</span>
           <p className="text-body-lg text-on-surface-variant text-center">
-            Ви ще не проводили перевірок. Перейдіть на <a href="/" className="text-emerald-glow hover:underline">головну</a> і запустіть першу!
+            {lang === "uk" ? (
+              <>Ви ще не проводили перевірок. Перейдіть на <a href="/" className="text-emerald-glow hover:underline">головну</a> і запустіть першу!</>
+            ) : (
+              <>No scans yet. Go to <a href="/" className="text-emerald-glow hover:underline">home</a> to run your first check!</>
+            )}
           </p>
         </div>
       ) : (
@@ -205,16 +221,16 @@ export default function HistoryPage() {
                   <div className="min-w-0">
                     <p className="text-body-md text-white font-medium truncate">{item.fileName}</p>
                     <p className="text-label-sm text-on-surface-variant mt-1">
-                      {date.toLocaleDateString("uk-UA", { day: "2-digit", month: "long", year: "numeric" })}
+                      {date.toLocaleDateString(lang === "uk" ? "uk-UA" : "en-US", { day: "2-digit", month: "short", year: "numeric" })}
                       {" · "}
-                      {date.toLocaleTimeString("uk-UA", { hour: "2-digit", minute: "2-digit" })}
-                      {item.wordCount ? ` · ${item.wordCount} слів` : ""}
+                      {date.toLocaleTimeString(lang === "uk" ? "uk-UA" : "en-US", { hour: "2-digit", minute: "2-digit" })}
+                      {item.wordCount ? ` · ${item.wordCount} ${t("wordsCount")}` : ""}
                     </p>
                   </div>
                 </div>
                 <div className="flex items-center gap-4 sm:gap-6 shrink-0">
                   <div className="text-right">
-                    <p className="text-label-sm text-on-surface-variant">Плагіат</p>
+                    <p className="text-label-sm text-on-surface-variant">{t("plagiarism")}</p>
                     <p className={`text-body-lg font-bold ${scoreColor}`}>{item.plagiarismScore}%</p>
                   </div>
                   {item.aiProbability !== undefined && (
@@ -226,7 +242,7 @@ export default function HistoryPage() {
                   <button
                     onClick={(e) => handleDeleteItem(e, item.id)}
                     className="p-1.5 text-on-surface-variant/40 hover:text-error hover:bg-error/10 rounded-lg transition-all"
-                    title="Видалити з історії"
+                    title={lang === "uk" ? "Видалити з історії" : "Delete from history"}
                   >
                     <span className="material-symbols-outlined text-[20px]">delete</span>
                   </button>

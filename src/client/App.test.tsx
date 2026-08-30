@@ -11,7 +11,7 @@ describe("App", () => {
       </MemoryRouter>
     );
 
-    expect(screen.getAllByText(/незбіг/i).length).toBeGreaterThan(0);
-    expect(screen.getByRole("button", { name: /запустити перевірку/i })).toBeInTheDocument();
+    expect(screen.getAllByText(/nezbig|незбіг/i).length).toBeGreaterThan(0);
+    expect(screen.getByRole("button", { name: /run plagiarism scan|запустити перевірку/i })).toBeInTheDocument();
   });
 });

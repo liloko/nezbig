@@ -268,7 +268,7 @@ export default function Home({ showToast }: { showToast: (msg: string, type?: "s
               </div>
               <div className="flex flex-col text-center">
                 <span className="font-label-sm text-label-sm text-on-surface-variant">{lang === "uk" ? "Орієнтовно" : "Est. Time"}</span>
-                <span className="stat-value font-body-lg text-body-lg text-white font-medium mt-1">~{formatDuration(estimatedSeconds)}</span>
+                <span className="stat-value font-body-lg text-body-lg text-white font-medium mt-1">{estimatedSeconds <= 0 ? (lang === "uk" ? "після додавання тексту" : "add text first") : formatDuration(estimatedSeconds, lang)}</span>
               </div>
               <div className="flex flex-col text-right">
                 <span className="font-label-sm text-label-sm text-on-surface-variant">{lang === "uk" ? "Перекриття" : "Overlap"}</span>

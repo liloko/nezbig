@@ -60,10 +60,13 @@ export function estimateScanSeconds(settings: ScanSettings, wordCount: number): 
   return Math.max(18, Math.round(8 + waves * secondsPerWave));
 }
 
-export function formatDuration(seconds: number): string {
-  if (seconds <= 0) return "після додавання тексту";
-  if (seconds < 60) return `~${seconds} с`;
+export function formatDuration(seconds: number, lang: "uk" | "en" = "en"): string {
+  if (seconds <= 0) return lang === "uk" ? "після додавання тексту" : "add text first";
+  if (seconds < 60) return lang === "uk" ? `~${seconds} с` : `~${seconds}s`;
   const minutes = Math.floor(seconds / 60);
   const rest = seconds % 60;
-  return rest > 0 ? `~${minutes} хв ${rest} с` : `~${minutes} хв`;
+  if (lang === "uk") {
+    return rest > 0 ? `~${minutes} хв ${rest} с` : `~${minutes} хв`;
+  }
+  return rest > 0 ? `~${minutes}m ${rest}s` : `~${minutes}m`;
 }

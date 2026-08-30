@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { useAuth } from "../hooks/useAuth";
+import { useLanguage } from "../context/LanguageContext";
 
 interface AuthModalProps {
   open: boolean;
@@ -8,6 +9,7 @@ interface AuthModalProps {
 
 export function AuthModal({ open, onClose }: AuthModalProps) {
   const { login, register, loginWithGoogle } = useAuth();
+  const { lang, t } = useLanguage();
   const [tab, setTab] = useState<"login" | "register">("login");
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
@@ -48,7 +50,7 @@ export function AuthModal({ open, onClose }: AuthModalProps) {
         <button 
           onClick={onClose} 
           className="absolute top-4 right-4 p-1.5 rounded-lg text-on-surface-variant hover:text-white hover:bg-white/5 transition-colors"
-          title="Закрити"
+          title={lang === "uk" ? "Закрити" : "Close"}
         >
           <span className="material-symbols-outlined text-xl">close</span>
         </button>
@@ -60,14 +62,14 @@ export function AuthModal({ open, onClose }: AuthModalProps) {
             onClick={() => { setTab("login"); setError(""); }}
             className={`font-headline-sm text-headline-sm transition-all pb-2 bg-transparent !border-0 ${tab === "login" ? "!text-emerald-glow !border-b-2 !border-emerald-glow font-bold -mb-[9px]" : "!text-on-surface-variant hover:!text-white"}`}
           >
-            Вхід
+            {lang === "uk" ? "Вхід" : "Sign In"}
           </button>
           <button
             type="button"
             onClick={() => { setTab("register"); setError(""); }}
             className={`font-headline-sm text-headline-sm transition-all pb-2 bg-transparent !border-0 ${tab === "register" ? "!text-emerald-glow !border-b-2 !border-emerald-glow font-bold -mb-[9px]" : "!text-on-surface-variant hover:!text-white"}`}
           >
-            Реєстрація
+            {lang === "uk" ? "Реєстрація" : "Register"}
           </button>
         </div>
 
@@ -83,12 +85,14 @@ export function AuthModal({ open, onClose }: AuthModalProps) {
             <path d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z" fill="#FBBC05"/>
             <path d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z" fill="#EA4335"/>
           </svg>
-          <span>Продовжити з Google</span>
+          <span>{lang === "uk" ? "Продовжити з Google" : "Continue with Google"}</span>
         </button>
 
         <div className="flex items-center gap-3 mb-5">
           <div className="flex-grow border-t border-white/10"></div>
-          <span className="text-label-sm text-on-surface-variant font-medium">або через email</span>
+          <span className="text-label-sm text-on-surface-variant font-medium">
+            {lang === "uk" ? "або через email" : "or with email"}
+          </span>
           <div className="flex-grow border-t border-white/10"></div>
         </div>
 
@@ -97,7 +101,7 @@ export function AuthModal({ open, onClose }: AuthModalProps) {
           {tab === "register" && (
             <input
               type="text"
-              placeholder="Ваше ім'я"
+              placeholder={lang === "uk" ? "Ваше ім'я" : "Full Name"}
               value={name}
               onChange={(e) => setName(e.target.value)}
               required
@@ -114,7 +118,7 @@ export function AuthModal({ open, onClose }: AuthModalProps) {
           />
           <input
             type="password"
-            placeholder="Пароль"
+            placeholder={lang === "uk" ? "Пароль" : "Password"}
             value={password}
             onChange={(e) => setPassword(e.target.value)}
             required
@@ -132,8 +136,8 @@ export function AuthModal({ open, onClose }: AuthModalProps) {
             className="w-full py-3.5 mt-1 bg-emerald-glow text-[#0e1514] font-bold rounded-xl hover:bg-[#3bf5e4] active:scale-[0.99] disabled:opacity-50 transition-all shadow-[0_8px_20px_rgba(46,196,182,0.25)] text-body-md flex items-center justify-center cursor-pointer"
           >
             {submitting
-              ? "Зачекайте..."
-              : tab === "login" ? "Увійти" : "Зареєструватися"
+              ? (lang === "uk" ? "Зачекайте..." : "Please wait...")
+              : tab === "login" ? (lang === "uk" ? "Увійти" : "Sign In") : (lang === "uk" ? "Зареєструватися" : "Create Account")
             }
           </button>
         </form>

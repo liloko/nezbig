@@ -1,5 +1,6 @@
 import type { ScanReport } from "../../shared/types";
 import { SignalCard } from "./SignalCard";
+import { useLanguage } from "../context/LanguageContext";
 import { reliabilityLabel, languageLabel, formatNumber, isDuplicateOpinionSignal } from "../utils/reportLabels";
 import { stripHtml } from "../utils/sanitizeHtml";
 
@@ -11,38 +12,44 @@ interface AiAnalysisPanelProps {
 }
 
 export function AiAnalysisPanel({ report, llmBusy, primarySignals, onRetryOpinion }: AiAnalysisPanelProps) {
+  const { lang, t } = useLanguage();
+
   return (
     <section aria-labelledby="ai-title">
-      <h3 id="ai-title">Розширений AI-аналіз</h3>
-      <p className="model-badge">{llmBusy ? "AI-думка: очікування відповіді…" : "Локальний AI-відсоток незалежний від LLM"}</p>
+      <h3 id="ai-title">{lang === "uk" ? "Розширений AI-аналіз" : "Comprehensive AI Detection"}</h3>
+      <p className="model-badge">
+        {llmBusy
+          ? (lang === "uk" ? "AI-думка: очікування відповіді…" : "AI Opinion: querying model…")
+          : (lang === "uk" ? "Локальний AI-відсоток незалежний від LLM" : "Multi-factor NLP stylometry independent of LLM")}
+      </p>
       <div className={`reliability-line reliability-${report.aiReliability.level}`}>
         <strong>
-          Надійність оцінки: {reliabilityLabel(report.aiReliability.level)} ({report.aiReliability.score}/100)
+          {lang === "uk" ? "Надійність оцінки:" : "Confidence Score:"} {reliabilityLabel(report.aiReliability.level, lang)} ({report.aiReliability.score}/100)
         </strong>
         <span>
-          {report.aiReliability.segmentCount} сегм. · розкид {report.aiReliability.segmentSpread} п.п.
+          {report.aiReliability.segmentCount} {lang === "uk" ? "сегм. · розкид" : "segm. · variance"} {report.aiReliability.segmentSpread} {lang === "uk" ? "п.п." : "pts"}
         </span>
         <p>{report.aiReliability.reason}</p>
       </div>
-      <div className="ai-context-strip" aria-label="Контекст локального AI-аналізу">
+      <div className="ai-context-strip" aria-label={lang === "uk" ? "Контекст локального AI-аналізу" : "Local AI context"}>
         <span>
-          <strong>Мова</strong>
-          {languageLabel(report.aiLanguage.code)} · {report.aiLanguage.supportedPercent}% покриття
+          <strong>{lang === "uk" ? "Мова" : "Language"}</strong>
+          {languageLabel(report.aiLanguage.code, lang)} · {report.aiLanguage.supportedPercent}% {lang === "uk" ? "покриття" : "coverage"}
         </span>
         <span>
-          <strong>Проаналізовано</strong>
-          {formatNumber(report.aiExclusions.analyzedWords)} слів
+          <strong>{lang === "uk" ? "Проаналізовано" : "Analyzed"}</strong>
+          {formatNumber(report.aiExclusions.analyzedWords, lang)} {t("wordsCount")}
         </span>
         {report.aiExclusions.codeWords > 0 ? (
           <span>
-            <strong>Код вилучено</strong>
-            {formatNumber(report.aiExclusions.codeWords)} слів
+            <strong>{lang === "uk" ? "Код вилучено" : "Code excluded"}</strong>
+            {formatNumber(report.aiExclusions.codeWords, lang)} {t("wordsCount")}
           </span>
         ) : null}
         {report.aiExclusions.quotedWords + report.aiExclusions.referenceWords > 0 ? (
           <span>
-            <strong>Цитати й джерела</strong>
-            {formatNumber(report.aiExclusions.quotedWords + report.aiExclusions.referenceWords)} слів
+            <strong>{lang === "uk" ? "Цитати й джерела" : "Quotes & Citations"}</strong>
+            {formatNumber(report.aiExclusions.quotedWords + report.aiExclusions.referenceWords, lang)} {t("wordsCount")}
           </span>
         ) : null}
       </div>
@@ -52,21 +59,22 @@ export function AiAnalysisPanel({ report, llmBusy, primarySignals, onRetryOpinio
           {stripHtml(report.aiOpinionError)}{" "}
           {onRetryOpinion ? (
             <button type="button" className="retry-opinion-button" onClick={onRetryOpinion}>
-              Повторити AI-думку
+              {lang === "uk" ? "Повторити AI-думку" : "Retry AI Opinion"}
             </button>
           ) : null}
         </p>
       ) : null}
       {report.aiOpinionProbability !== undefined ? (
         <div className="opinion-panel">
-          <strong>AI-думка: {report.aiOpinionProbability}%</strong>
+          <strong>{lang === "uk" ? "AI-думка:" : "AI Opinion:"} {report.aiOpinionProbability}%</strong>
           <span>{report.aiOpinionModel}</span>
           {report.aiOpinionNote ? <p>{stripHtml(report.aiOpinionNote)}</p> : null}
         </div>
       ) : null}
       <p className="section-note">
-        Локальний ансамбль перевіряє авторський текст повністю й окремими сегментами. Відсоток є евристичним індикатором ризику, а не каліброваною ймовірністю чи доказом
-        авторства. Смуга «±N п.п.» показує орієнтовну невизначеність: вона ширша для коротких текстів, слабкої надійності та великого розкиду між сегментами.
+        {lang === "uk"
+          ? "Локальний ансамбль перевіряє авторський текст повністю й окремими сегментами. Відсоток є евристичним індикатором ризику, а не каліброваною ймовірністю чи доказом авторства."
+          : "The NLP ensemble analyzes the entire submission as well as individual segments. The percentage represents an empirical stylometric risk indicator rather than definitive proof of authorship."}
       </p>
       <div className="signal-list">
         {primarySignals.map((signal) => (
