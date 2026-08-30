@@ -1,19 +1,19 @@
 import * as cheerio from "cheerio";
 import { franc } from "franc-min";
-import { excerptForSearch, normalizeWhitespace } from "./chunking.js";
+import { normalizeWhitespace } from "./chunking.js";
 import { ProviderCircuitBreaker } from "./providerCircuitBreaker.js";
 import { ProviderTaskScheduler } from "./providerTaskScheduler.js";
 import { DistributedCache } from "./searchCache.js";
 import { emptySearchDiagnostics, mergeSearchDiagnostics } from "./searchDiagnostics.js";
 import type { SearchCandidate, SearchDiagnostics, SearchProviderDiagnostic } from "../shared/types.js";
 
-const SEARCH_TIMEOUT_MS = 9000;
-const PAGE_TIMEOUT_MS = 8500;
+const SEARCH_TIMEOUT_MS = 8000;
+const PAGE_TIMEOUT_MS = 7500;
 const MAX_PAGE_CHARS = 120_000;
 const searchCache = new DistributedCache<SearchCandidate[]>("search", 1000 * 60 * 30, 500);
 const pageCache = new DistributedCache<string>("page", 1000 * 60 * 60, 500);
-const providerCircuit = new ProviderCircuitBreaker(3, 60_000);
-const providerScheduler = new ProviderTaskScheduler(3);
+const providerCircuit = new ProviderCircuitBreaker(3, 45_000);
+const providerScheduler = new ProviderTaskScheduler(4);
 
 export type SearchProfile = {
   hydrateLimit?: number;
@@ -38,9 +38,26 @@ type PageReadResult = {
   negativeCacheHit: boolean;
 };
 
+const STOP_WORDS = new Set([
+  "та", "і", "й", "в", "у", "на", "до", "з", "із", "зі", "за", "по", "про", "як", "що", "це", "де", "чи",
+  "але", "проте", "однак", "тому", "який", "яка", "яке", "які", "яких", "яким", "якого", "якій",
+  "свій", "свого", "своїй", "свої", "цей", "ця", "це", "ці", "цих", "цим", "цього", "цій",
+  "від", "під", "над", "перед", "через", "при", "для", "без", "щоб", "якщо", "коли", "було", "були", "буде", "є",
+  "and", "or", "the", "a", "an", "in", "on", "at", "to", "for", "with", "by", "from", "of", "about", "that", "this", "is", "are", "was", "were", "be", "been"
+]);
+
+function cleanPunctuationForQuery(text: string): string {
+  return text
+    .replace(/[«»""''„“”]/g, " ")
+    .replace(/[.,;:!?()[\]{}\\/—–-]/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
 function decodeDuckDuckGoUrl(href: string): string {
   try {
-    const url = new URL(href, "https://duckduckgo.com");
+    const fullUrl = href.startsWith("//") ? `https:${href}` : href;
+    const url = new URL(fullUrl, "https://duckduckgo.com");
     const encoded = url.searchParams.get("uddg");
     return encoded ? decodeURIComponent(encoded) : url.href;
   } catch {
@@ -122,104 +139,114 @@ function interleaveCandidates(groups: SearchCandidate[][]): SearchCandidate[] {
   return interleaved;
 }
 
-function phraseScore(words: string[]): number {
-  const normalized = words.map((word) => word.toLowerCase().replace(/[^\p{L}\p{N}'-]/gu, "")).filter(Boolean);
-  const uniqueRatio = new Set(normalized).size / Math.max(1, normalized.length);
-  // Lower length threshold for Cyrillic (5) vs Latin (7) since Ukrainian words are naturally longer
-  const informative = normalized.filter((word) => word.length >= (/[\u0400-\u04FF]/.test(word) ? 5 : 7) || /\d/.test(word)).length;
-  const averageLength = normalized.reduce((sum, word) => sum + word.length, 0) / Math.max(1, normalized.length);
-  return uniqueRatio * 10 + informative * 1.8 + averageLength;
-}
-
+/**
+ * Generates high-recall and high-precision search query variations for a given text chunk
+ */
 export function buildSearchQueries(chunkText: string, deep: boolean): string[] {
-  const words = normalizeWhitespace(chunkText).split(" ").filter(Boolean);
-  if (words.length === 0) return [];
+  const clean = cleanPunctuationForQuery(chunkText);
+  const words = clean.split(" ").filter(Boolean);
+  if (words.length < 5) return [chunkText.slice(0, 100)];
 
-  const phraseWords = deep ? 12 : 10;
-  const stride = Math.max(5, Math.floor(phraseWords / 2));
-  const phraseCandidates: Array<{ phrase: string; score: number; bucket: number }> = [];
-  for (let start = 0; start <= Math.max(0, words.length - phraseWords); start += stride) {
-    const slice = words.slice(start, start + phraseWords);
-    if (slice.length < Math.min(7, phraseWords)) continue;
-    phraseCandidates.push({
-      phrase: slice.join(" "),
-      score: phraseScore(slice),
-      bucket: Math.min(3, Math.floor((start / Math.max(1, words.length - phraseWords)) * 4))
-    });
+  const queries: string[] = [];
+
+  // 1. Natural consecutive clause 1 (7-9 words from beginning/middle)
+  const window1Size = Math.min(8, words.length);
+  const clause1 = words.slice(0, window1Size).join(" ");
+  queries.push(clause1);
+
+  // 2. Natural consecutive clause 2 (7-9 words from mid/end if text is long enough)
+  if (words.length >= 14) {
+    const midStart = Math.floor(words.length / 2) - 3;
+    const clause2 = words.slice(midStart, midStart + 8).join(" ");
+    queries.push(clause2);
   }
 
-  const distributedCandidates = [0, 1, 2, 3]
-    .map((bucket) => phraseCandidates.filter((candidate) => candidate.bucket === bucket).sort((a, b) => b.score - a.score)[0])
-    .filter((candidate): candidate is NonNullable<typeof candidate> => Boolean(candidate));
-  const exactQueries = distributedCandidates
-    .sort((a, b) => b.score - a.score)
-    .filter((candidate, index, all) => all.findIndex((other) => other.phrase.toLowerCase() === candidate.phrase.toLowerCase()) === index)
-    .slice(0, deep ? 4 : 2)
-    .map(({ phrase }) => `"${phrase}"`);
+  // 3. Short exact phrase in quotes (5-6 words from the most informative segment)
+  const nonStopSlices: Array<{ phrase: string; score: number }> = [];
+  const phraseLen = 5;
+  for (let i = 0; i <= words.length - phraseLen; i += 3) {
+    const slice = words.slice(i, i + phraseLen);
+    const nonStopCount = slice.filter((w) => !STOP_WORDS.has(w.toLowerCase()) && w.length >= 4).length;
+    nonStopSlices.push({
+      phrase: slice.join(" "),
+      score: nonStopCount
+    });
+  }
+  nonStopSlices.sort((a, b) => b.score - a.score);
+  if (nonStopSlices.length > 0) {
+    queries.push(`"${nonStopSlices[0].phrase}"`);
+    if (deep && nonStopSlices.length > 1) {
+      queries.push(`"${nonStopSlices[1].phrase}"`);
+    }
+  }
 
-  const keywordQuery = [...new Set(words.map((word) => word.replace(/[^\p{L}\p{N}'-]/gu, "")).filter((word) => word.length >= 7 || /\d/.test(word)))]
-    .sort((a, b) => b.length - a.length)
-    .slice(0, deep ? 12 : 9)
-    .join(" ");
-  const fallback = excerptForSearch(chunkText);
-  const queries = [...exactQueries, keywordQuery, `"${fallback}"`].filter((query) => query.replaceAll('"', "").trim().length > 20);
+  // 4. Salient keyword query (preserves sentence order of distinctive terms)
+  const salient = words.filter((w) => !STOP_WORDS.has(w.toLowerCase()) && (w.length >= 5 || /\d/.test(w)));
+  if (salient.length >= 4) {
+    queries.push(salient.slice(0, deep ? 10 : 8).join(" "));
+  }
 
-  return [...new Set(queries)];
+  return [...new Set(queries.filter((q) => q.replace(/"/g, "").trim().length >= 15))];
 }
 
+/**
+ * Searches DuckDuckGo via fast HTML scraping with fallback to API scraper
+ */
 async function searchDuckDuckGo(query: string, maxResults: number): Promise<SearchCandidate[]> {
   const key = cacheKey("duckduckgo", query, maxResults);
   const cached = await searchCache.get(key);
   if (cached) return cached;
 
-  const runSearxng = async (): Promise<SearchCandidate[]> => {
-    const searxngUrl = process.env.SEARXNG_URL;
-    if (!searxngUrl) return [];
+  // 1. Try DuckDuckGo HTML endpoint
+  try {
+    const url = `https://html.duckduckgo.com/html/?q=${encodeURIComponent(query)}`;
+    const response = await fetch(url, {
+      signal: withTimeout(SEARCH_TIMEOUT_MS),
+      headers: {
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36",
+        Accept: "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8"
+      }
+    });
 
-    const url = new URL(`${searxngUrl}/search`);
-    url.searchParams.set("q", query);
-    url.searchParams.set("format", "json");
+    if (response.ok) {
+      const html = await response.text();
+      const $ = cheerio.load(html);
+      const candidates: SearchCandidate[] = [];
 
-    try {
-      const response = await fetch(url, { signal: withTimeout(SEARCH_TIMEOUT_MS) });
-      if (!response.ok) return [];
+      $(".result").each((_, el) => {
+        const title = $(el).find(".result__title").text().trim();
+        const rawHref = $(el).find(".result__url").attr("href") || $(el).find(".result__title a").attr("href") || "";
+        const snippet = $(el).find(".result__snippet").text().trim();
+        const realUrl = decodeDuckDuckGoUrl(rawHref);
 
-      const data = (await response.json()) as { results?: Array<{ title?: string; url?: string; content?: string }> };
-      return (data.results || [])
-        .filter((r) => r.title && r.url && r.content)
-        .slice(0, maxResults)
-        .map((r) => ({
-          title: normalizeWhitespace(r.title!),
-          url: r.url!,
-          snippet: normalizeWhitespace(r.content!),
-          query,
-          provider: process.env.SEARXNG_URL ? "SearXNG" : "DuckDuckGo (SearXNG Fallback)"
-        }));
-    } catch {
-      return [];
+        if (title && realUrl && realUrl.startsWith("http")) {
+          candidates.push({
+            title: normalizeWhitespace(title),
+            url: realUrl,
+            snippet: normalizeWhitespace(snippet),
+            query,
+            provider: "DuckDuckGo"
+          });
+        }
+      });
+
+      if (candidates.length > 0) {
+        const sliced = candidates.slice(0, maxResults);
+        await searchCache.set(key, sliced);
+        return sliced;
+      }
     }
-  };
-
-  const hasSearxng = !!process.env.SEARXNG_URL;
-  if (hasSearxng) {
-    const searxResults = await runSearxng();
-    if (searxResults.length > 0) {
-      await searchCache.set(key, searxResults);
-      return searxResults;
-    }
+  } catch {
+    // Continue to next fallback
   }
 
+  // 2. Try duck-duck-scrape library
   try {
     const { search, SafeSearchType } = await import("duck-duck-scrape");
     const searchResults = await search(query, { safeSearch: SafeSearchType.OFF });
-    
-    if (!searchResults.results || searchResults.results.length === 0) {
-      throw new Error("No results from duck-duck-scrape");
-    }
 
-    const candidates: SearchCandidate[] = searchResults.results
-      .slice(0, maxResults)
-      .map((r) => ({
+    if (searchResults.results && searchResults.results.length > 0) {
+      const candidates: SearchCandidate[] = searchResults.results.slice(0, maxResults).map((r) => ({
         title: normalizeWhitespace(r.title),
         url: r.url,
         snippet: normalizeWhitespace(r.description),
@@ -227,25 +254,337 @@ async function searchDuckDuckGo(query: string, maxResults: number): Promise<Sear
         provider: "DuckDuckGo"
       }));
 
-    if (candidates.length > 0) {
-      await searchCache.set(key, candidates);
-      return candidates;
+      if (candidates.length > 0) {
+        await searchCache.set(key, candidates);
+        return candidates;
+      }
     }
-  } catch (error) {
-    // Silently fall back
+  } catch {
+    // Fallback to SearXNG if available
   }
 
-  if (!hasSearxng) {
-    const fallback = await runSearxng();
-    if (fallback.length > 0) {
-      await searchCache.set(key, fallback);
+  // 3. Fallback to SearXNG if configured
+  const searxngUrl = process.env.SEARXNG_URL;
+  if (searxngUrl) {
+    try {
+      const url = new URL(`${searxngUrl}/search`);
+      url.searchParams.set("q", query);
+      url.searchParams.set("format", "json");
+
+      const response = await fetch(url, { signal: withTimeout(SEARCH_TIMEOUT_MS) });
+      if (response.ok) {
+        const data = (await response.json()) as { results?: Array<{ title?: string; url?: string; content?: string }> };
+        const results = (data.results || [])
+          .filter((r) => r.title && r.url && r.content)
+          .slice(0, maxResults)
+          .map((r) => ({
+            title: normalizeWhitespace(r.title!),
+            url: r.url!,
+            snippet: normalizeWhitespace(r.content!),
+            query,
+            provider: "SearXNG"
+          }));
+
+        if (results.length > 0) {
+          await searchCache.set(key, results);
+          return results;
+        }
+      }
+    } catch {
+      // Return empty
     }
-    return fallback;
   }
-  
+
   return [];
 }
 
+/**
+ * Searches Crossref open DOI repository for Ukrainian and international scientific papers, theses, and journals
+ */
+async function searchCrossref(query: string, maxResults: number): Promise<SearchCandidate[]> {
+  const key = cacheKey("crossref", query, maxResults);
+  const cached = await searchCache.get(key);
+  if (cached) return cached;
+
+  const plainQuery = query.replaceAll('"', "").trim();
+  if (plainQuery.length < 12) return [];
+
+  try {
+    const url = new URL("https://api.crossref.org/works");
+    url.searchParams.set("query", plainQuery);
+    url.searchParams.set("rows", String(Math.min(10, maxResults)));
+    url.searchParams.set("mailto", "support@nezbig.app");
+
+    const response = await fetch(url, {
+      signal: withTimeout(SEARCH_TIMEOUT_MS),
+      headers: {
+        "User-Agent": "NezbigOriginality/1.0 (mailto:support@nezbig.app)",
+        Accept: "application/json"
+      }
+    });
+
+    if (!response.ok) return [];
+
+    const data = (await response.json()) as any;
+    const items = data.message?.items ?? [];
+
+    const results = items
+      .map((r: any): SearchCandidate | null => {
+        const title = Array.isArray(r.title) ? r.title[0] : r.title;
+        const authors = (r.author ?? [])
+          .slice(0, 3)
+          .map((a: any) => `${a.given || ""} ${a.family || ""}`.trim())
+          .filter(Boolean)
+          .join(", ");
+        const year = r.issued?.["date-parts"]?.[0]?.[0];
+        const container = r.container_title?.[0];
+        const meta = [authors, year, container].filter(Boolean).join(" · ");
+        const targetUrl = r.URL || (r.DOI ? `https://doi.org/${r.DOI}` : "");
+
+        if (!title || !targetUrl) return null;
+
+        return {
+          title: normalizeWhitespace(title),
+          url: targetUrl,
+          snippet: normalizeWhitespace(meta ? `${meta}. Академічна праця у базі Crossref.` : "Академічна публікація з реєстру Crossref DOI"),
+          query,
+          provider: "Crossref",
+          sourceText: title,
+          verifiedTextLength: title.length
+        };
+      })
+      .filter((r: SearchCandidate | null): r is SearchCandidate => r !== null)
+      .slice(0, maxResults);
+
+    await searchCache.set(key, results);
+    return results;
+  } catch {
+    return [];
+  }
+}
+
+/**
+ * Searches OpenAlex free academic graph
+ */
+export function abstractFromInvertedIndex(index?: Record<string, number[]> | null): string | undefined {
+  if (!index) return undefined;
+  const positioned = Object.entries(index).flatMap(([word, positions]) => positions.map((position) => ({ word, position })));
+  if (positioned.length === 0) return undefined;
+  return normalizeWhitespace(
+    positioned
+      .sort((a, b) => a.position - b.position)
+      .map(({ word }) => word)
+      .join(" ")
+  );
+}
+
+async function searchOpenAlex(query: string, maxResults: number): Promise<SearchCandidate[]> {
+  const key = cacheKey("openalex", query, maxResults);
+  const cached = await searchCache.get(key);
+  if (cached) return cached;
+
+  const plainQuery = query.replaceAll('"', "").trim();
+  if (plainQuery.length < 12) return [];
+
+  try {
+    const url = new URL("https://api.openalex.org/works");
+    url.searchParams.set("search", plainQuery);
+    url.searchParams.set("per_page", String(Math.min(10, maxResults)));
+    url.searchParams.set("mailto", "support@nezbig.app");
+    url.searchParams.set("select", "id,doi,display_name,publication_year,authorships,abstract_inverted_index,best_oa_location,primary_location");
+
+    const response = await fetch(url, {
+      signal: withTimeout(SEARCH_TIMEOUT_MS),
+      headers: {
+        "User-Agent": "NezbigOriginality/1.0 (mailto:support@nezbig.app)",
+        Accept: "application/json"
+      }
+    });
+
+    if (!response.ok) return [];
+
+    const payload = (await response.json()) as {
+      results?: Array<{
+        id?: string;
+        doi?: string;
+        display_name?: string;
+        publication_year?: number;
+        authorships?: Array<{ author?: { display_name?: string } }>;
+        abstract_inverted_index?: Record<string, number[]> | null;
+        best_oa_location?: { landing_page_url?: string; pdf_url?: string } | null;
+        primary_location?: { landing_page_url?: string } | null;
+      }>;
+    };
+
+    const results = (payload.results ?? [])
+      .flatMap((work): SearchCandidate[] => {
+        const title = normalizeWhitespace(work.display_name ?? "");
+        const abstract = abstractFromInvertedIndex(work.abstract_inverted_index);
+        const url = work.doi ?? work.best_oa_location?.landing_page_url ?? work.primary_location?.landing_page_url ?? work.id ?? "";
+        if (!title || !url) return [];
+        const authors = work.authorships
+          ?.slice(0, 3)
+          .map((authorship) => authorship.author?.display_name)
+          .filter(Boolean)
+          .join(", ");
+        const metadata = [authors, work.publication_year].filter(Boolean).join(", ");
+        const snippetText = abstract ? (metadata ? `${metadata}. ${abstract}` : abstract) : (metadata ? `${metadata}. Наукова стаття OpenAlex.` : title);
+
+        return [
+          {
+            title,
+            url,
+            snippet: normalizeWhitespace(snippetText),
+            query,
+            provider: "OpenAlex",
+            sourceText: abstract ?? title,
+            verifiedTextLength: (abstract ?? title).length
+          }
+        ];
+      })
+      .slice(0, maxResults);
+
+    await searchCache.set(key, results);
+    return results;
+  } catch {
+    return [];
+  }
+}
+
+/**
+ * Searches Wikipedia API
+ */
+async function searchWikipedia(query: string, maxResults: number): Promise<SearchCandidate[]> {
+  const key = cacheKey("wikipedia", query, maxResults);
+  const cached = await searchCache.get(key);
+  if (cached) return cached;
+
+  const plainQuery = cleanPunctuationForQuery(query).replace(/\s+/g, " ").trim();
+  if (plainQuery.length < 8) return [];
+
+  const lang = franc(plainQuery);
+  const prefixMap: Record<string, string> = {
+    eng: "en",
+    ukr: "uk",
+    rus: "ru",
+    deu: "de",
+    fra: "fr",
+    pol: "pl",
+    spa: "es",
+    ita: "it"
+  };
+  const prefix = prefixMap[lang] ?? "uk";
+
+  const url = new URL(`https://${prefix}.wikipedia.org/w/api.php`);
+  url.searchParams.set("action", "query");
+  url.searchParams.set("list", "search");
+  url.searchParams.set("srsearch", plainQuery);
+  url.searchParams.set("format", "json");
+  url.searchParams.set("srlimit", String(Math.min(10, maxResults)));
+
+  try {
+    const response = await fetch(url, {
+      signal: withTimeout(SEARCH_TIMEOUT_MS),
+      headers: {
+        "User-Agent": "Mozilla/5.0 Nezbig/1.0 (+academic originality checker)",
+        Accept: "application/json"
+      }
+    });
+
+    if (!response.ok) return [];
+
+    const payload = (await response.json()) as { query?: { search?: Array<{ title?: string; snippet?: string; pageid?: number }> } };
+
+    const results = (payload.query?.search ?? [])
+      .filter((item) => item.title && item.snippet)
+      .slice(0, maxResults)
+      .map((item) => {
+        const cleanSnippet = item.snippet!.replace(/<[^>]+>/g, "");
+        return {
+          title: `${item.title!} - Вікіпедія`,
+          url: `https://${prefix}.wikipedia.org/wiki/?curid=${item.pageid}`,
+          snippet: normalizeWhitespace(cleanSnippet),
+          query,
+          provider: "Wikipedia"
+        };
+      });
+
+    await searchCache.set(key, results);
+    return results;
+  } catch {
+    return [];
+  }
+}
+
+/**
+ * Searches Semantic Scholar API
+ */
+async function searchSemanticScholar(query: string, maxResults: number): Promise<SearchCandidate[]> {
+  const key = cacheKey("semantic-scholar", query, maxResults);
+  const cached = await searchCache.get(key);
+  if (cached) return cached;
+
+  const plainQuery = query.replaceAll('"', "").trim();
+  if (plainQuery.length < 18) return [];
+
+  try {
+    const url = new URL("https://api.semanticscholar.org/graph/v1/paper/search");
+    url.searchParams.set("query", plainQuery);
+    url.searchParams.set("limit", String(Math.min(10, maxResults)));
+    url.searchParams.set("fields", "title,abstract,url,year,authors");
+
+    const response = await fetch(url, {
+      signal: withTimeout(SEARCH_TIMEOUT_MS),
+      headers: {
+        "User-Agent": "Mozilla/5.0 Nezbig/1.0 (+academic originality checker)",
+        Accept: "application/json"
+      }
+    });
+
+    if (!response.ok) return [];
+
+    const payload = (await response.json()) as {
+      data?: Array<{
+        title?: string;
+        abstract?: string;
+        url?: string;
+        year?: number;
+        authors?: Array<{ name?: string }>;
+      }>;
+    };
+
+    const results = (payload.data ?? [])
+      .filter((paper) => paper.title && paper.url)
+      .slice(0, maxResults)
+      .map((paper): SearchCandidate => {
+        const authors = paper.authors
+          ?.slice(0, 2)
+          .map((author) => author.name)
+          .filter(Boolean)
+          .join(", ");
+        const meta = [authors, paper.year].filter(Boolean).join(", ");
+        const content = paper.abstract ?? paper.title ?? "";
+        return {
+          title: normalizeWhitespace(paper.title ?? ""),
+          url: paper.url ?? "",
+          snippet: normalizeWhitespace(meta ? `${meta}. ${content}` : content),
+          query,
+          provider: "Semantic Scholar",
+          sourceText: normalizeWhitespace(content),
+          verifiedTextLength: content.length
+        };
+      });
+
+    await searchCache.set(key, results);
+    return results;
+  } catch {
+    return [];
+  }
+}
+
+/**
+ * Searches Google Custom Search Engine (if API credentials provided)
+ */
 async function searchGoogleCustom(query: string, maxResults: number): Promise<SearchCandidate[]> {
   const apiKey = process.env.GOOGLE_SEARCH_API_KEY?.trim();
   const cx = process.env.GOOGLE_SEARCH_ENGINE_ID?.trim();
@@ -264,8 +603,8 @@ async function searchGoogleCustom(query: string, maxResults: number): Promise<Se
   const response = await fetch(url, {
     signal: withTimeout(SEARCH_TIMEOUT_MS),
     headers: {
-      "user-agent": "Mozilla/5.0 Nezbig/1.0 (+local plagiarism checker)",
-      accept: "application/json"
+      "User-Agent": "Mozilla/5.0 Nezbig/1.0 (+local plagiarism checker)",
+      Accept: "application/json"
     }
   });
 
@@ -294,87 +633,9 @@ async function searchGoogleCustom(query: string, maxResults: number): Promise<Se
   return results;
 }
 
-async function searchWikipedia(query: string, maxResults: number): Promise<SearchCandidate[]> {
-  const key = cacheKey("wikipedia", query, maxResults);
-  const cached = await searchCache.get(key);
-  if (cached) return cached;
-
-  // For Wikipedia, we just use the most significant words as the search query
-  const plainQuery = query.replaceAll('"', "").trim();
-  if (plainQuery.length < 10) return [];
-
-  const lang = franc(plainQuery);
-  const prefixMap: Record<string, string> = {
-    eng: 'en',
-    ukr: 'uk',
-    rus: 'ru',
-    deu: 'de',
-    fra: 'fr',
-    pol: 'pl',
-    spa: 'es',
-    ita: 'it',
-    nld: 'nl',
-    por: 'pt',
-    swe: 'sv',
-    ces: 'cs',
-    hun: 'hu',
-    ron: 'ro',
-    ell: 'el',
-    bul: 'bg',
-    srp: 'sr',
-    hrv: 'hr',
-    slv: 'sl',
-    lit: 'lt',
-    lav: 'lv',
-    est: 'et',
-    fin: 'fi',
-    nor: 'no',
-    dan: 'da',
-  };
-  const prefix = prefixMap[lang] ?? 'en';
-
-  const url = new URL(`https://${prefix}.wikipedia.org/w/api.php`);
-  url.searchParams.set("action", "query");
-  url.searchParams.set("list", "search");
-  url.searchParams.set("srsearch", plainQuery);
-  url.searchParams.set("format", "json");
-  url.searchParams.set("srlimit", String(Math.min(10, maxResults)));
-
-  try {
-    const response = await fetch(url, {
-      signal: withTimeout(SEARCH_TIMEOUT_MS),
-      headers: {
-        "user-agent": "Mozilla/5.0 Nezbig/1.0 (+local plagiarism checker)",
-        accept: "application/json"
-      }
-    });
-
-    if (!response.ok) return [];
-
-    const payload = await response.json() as { query?: { search?: Array<{ title?: string; snippet?: string; pageid?: number }> } };
-    
-    const results = (payload.query?.search ?? [])
-      .filter(item => item.title && item.snippet)
-      .slice(0, maxResults)
-      .map(item => {
-        // Wikipedia snippet has HTML tags like <span class="searchmatch">, we need to clean it
-        const cleanSnippet = item.snippet!.replace(/<[^>]+>/g, "");
-        return {
-          title: item.title! + " - Wikipedia",
-          url: `https://${prefix}.wikipedia.org/wiki/?curid=${item.pageid}`,
-          snippet: normalizeWhitespace(cleanSnippet),
-          query,
-          provider: "Wikipedia"
-        };
-      });
-
-    await searchCache.set(key, results);
-    return results;
-  } catch {
-    return [];
-  }
-}
-
+/**
+ * Searches Brave Search (if API key provided)
+ */
 async function searchBrave(query: string, maxResults: number): Promise<SearchCandidate[]> {
   const apiKey = process.env.BRAVE_SEARCH_API_KEY?.trim();
   if (!apiKey) return [];
@@ -392,8 +653,8 @@ async function searchBrave(query: string, maxResults: number): Promise<SearchCan
     signal: withTimeout(SEARCH_TIMEOUT_MS),
     headers: {
       "x-subscription-token": apiKey,
-      "user-agent": "Mozilla/5.0 Nezbig/1.0 (+local plagiarism checker)",
-      accept: "application/json"
+      "User-Agent": "Mozilla/5.0 Nezbig/1.0 (+local plagiarism checker)",
+      Accept: "application/json"
     }
   });
   if (!response.ok) throw new Error(`Brave Search HTTP ${response.status}`);
@@ -423,145 +684,9 @@ async function searchBrave(query: string, maxResults: number): Promise<SearchCan
   return results;
 }
 
-async function searchSemanticScholar(query: string, maxResults: number): Promise<SearchCandidate[]> {
-  const key = cacheKey("semantic-scholar", query, maxResults);
-  const cached = await searchCache.get(key);
-  if (cached) return cached;
-
-  const plainQuery = query.replaceAll('"', "").trim();
-  if (plainQuery.length < 24) return [];
-
-  const url = new URL("https://api.semanticscholar.org/graph/v1/paper/search");
-  url.searchParams.set("query", plainQuery);
-  url.searchParams.set("limit", String(Math.min(10, maxResults)));
-  url.searchParams.set("fields", "title,abstract,url,year,authors");
-
-  const response = await fetch(url, {
-    signal: withTimeout(SEARCH_TIMEOUT_MS),
-    headers: {
-      "user-agent": "Mozilla/5.0 Nezbig/1.0 (+academic originality checker)",
-      accept: "application/json"
-    }
-  });
-
-  if (!response.ok) throw new Error(`Semantic Scholar HTTP ${response.status}`);
-
-  const payload = (await response.json()) as {
-    data?: Array<{
-      title?: string;
-      abstract?: string;
-      url?: string;
-      year?: number;
-      authors?: Array<{ name?: string }>;
-    }>;
-  };
-
-  const results = (payload.data ?? [])
-    .filter((paper) => paper.title && paper.url && paper.abstract)
-    .slice(0, maxResults)
-    .map((paper): SearchCandidate => {
-      const authors = paper.authors
-        ?.slice(0, 2)
-        .map((author) => author.name)
-        .filter(Boolean)
-        .join(", ");
-      const meta = [authors, paper.year].filter(Boolean).join(", ");
-      return {
-        title: normalizeWhitespace(paper.title ?? ""),
-        url: paper.url ?? "",
-        snippet: normalizeWhitespace(meta ? `${meta}. ${paper.abstract}` : (paper.abstract ?? "")),
-        query,
-        provider: "Semantic Scholar",
-        sourceText: normalizeWhitespace(paper.abstract ?? ""),
-        verifiedTextLength: paper.abstract?.length
-      };
-    });
-
-  await searchCache.set(key, results);
-  return results;
-}
-
-export function abstractFromInvertedIndex(index?: Record<string, number[]> | null): string | undefined {
-  if (!index) return undefined;
-  const positioned = Object.entries(index).flatMap(([word, positions]) => positions.map((position) => ({ word, position })));
-  if (positioned.length === 0) return undefined;
-  return normalizeWhitespace(
-    positioned
-      .sort((a, b) => a.position - b.position)
-      .map(({ word }) => word)
-      .join(" ")
-  );
-}
-
-async function searchOpenAlex(query: string, maxResults: number): Promise<SearchCandidate[]> {
-  const apiKey = process.env.OPENALEX_API_KEY?.trim();
-  if (!apiKey) return [];
-
-  const key = cacheKey("openalex", query, maxResults);
-  const cached = await searchCache.get(key);
-  if (cached) return cached;
-
-  const plainQuery = query.replaceAll('"', "").trim();
-  if (plainQuery.length < 24) return [];
-
-  const url = new URL("https://api.openalex.org/works");
-  url.searchParams.set("api_key", apiKey);
-  url.searchParams.set("search", plainQuery);
-  url.searchParams.set("per_page", String(Math.min(10, maxResults)));
-  url.searchParams.set("select", "id,doi,display_name,publication_year,authorships,abstract_inverted_index,best_oa_location,primary_location");
-
-  const response = await fetch(url, {
-    signal: withTimeout(SEARCH_TIMEOUT_MS),
-    headers: {
-      "user-agent": "Mozilla/5.0 Nezbig/1.0 (+academic originality checker)",
-      accept: "application/json"
-    }
-  });
-  if (!response.ok) throw new Error(`OpenAlex HTTP ${response.status}`);
-
-  const payload = (await response.json()) as {
-    results?: Array<{
-      id?: string;
-      doi?: string;
-      display_name?: string;
-      publication_year?: number;
-      authorships?: Array<{ author?: { display_name?: string } }>;
-      abstract_inverted_index?: Record<string, number[]> | null;
-      best_oa_location?: { landing_page_url?: string; pdf_url?: string } | null;
-      primary_location?: { landing_page_url?: string } | null;
-    }>;
-  };
-
-  const results = (payload.results ?? [])
-    .flatMap((work): SearchCandidate[] => {
-      const title = normalizeWhitespace(work.display_name ?? "");
-      const abstract = abstractFromInvertedIndex(work.abstract_inverted_index);
-      const url = work.doi ?? work.best_oa_location?.landing_page_url ?? work.primary_location?.landing_page_url ?? work.id ?? "";
-      if (!title || !url || !abstract) return [];
-      const authors = work.authorships
-        ?.slice(0, 3)
-        .map((authorship) => authorship.author?.display_name)
-        .filter(Boolean)
-        .join(", ");
-      const metadata = [authors, work.publication_year].filter(Boolean).join(", ");
-      return [
-        {
-          title,
-          url,
-          snippet: normalizeWhitespace(metadata ? `${metadata}. ${abstract}` : abstract),
-          query,
-          provider: "OpenAlex",
-          sourceText: abstract,
-          verifiedTextLength: abstract.length
-        }
-      ];
-    })
-    .slice(0, maxResults);
-
-  await searchCache.set(key, results);
-  return results;
-}
-
+/**
+ * Fetches page content (supporting HTML, plaintext, and PDF documents)
+ */
 async function fetchReadablePageText(url: string): Promise<PageReadResult> {
   const cached = await pageCache.get(url);
   if (cached !== undefined) {
@@ -579,8 +704,8 @@ async function fetchReadablePageText(url: string): Promise<PageReadResult> {
       signal: withTimeout(PAGE_TIMEOUT_MS),
       redirect: "follow",
       headers: {
-        "user-agent": "Mozilla/5.0 Nezbig/1.0 (+local plagiarism checker)",
-        accept: "text/html,application/xhtml+xml,text/plain;q=0.9"
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36",
+        Accept: "text/html,application/xhtml+xml,text/plain,application/pdf;q=0.9,*/*;q=0.8"
       }
     });
 
@@ -588,65 +713,90 @@ async function fetchReadablePageText(url: string): Promise<PageReadResult> {
       await pageCache.set(url, null);
       return { attempted: true, cacheHit: false, negativeCacheHit: false };
     }
+
     const contentType = response.headers.get("content-type") ?? "";
-    if (!/text\/html|text\/plain|application\/xhtml\+xml/i.test(contentType)) {
-      await pageCache.set(url, null);
-      return { attempted: true, cacheHit: false, negativeCacheHit: false };
+
+    // 1. Handle PDF documents directly
+    if (/application\/pdf/i.test(contentType) || /\.pdf($|\?)/i.test(url)) {
+      try {
+        const arrayBuffer = await response.arrayBuffer();
+        const buffer = Buffer.from(arrayBuffer);
+        const { PDFParse } = await import("pdf-parse");
+        const parser = new PDFParse({ data: buffer });
+        try {
+          const result = await parser.getText();
+          const text = normalizeWhitespace(result.text).slice(0, MAX_PAGE_CHARS);
+          const readable = text.length > 160 ? text : null;
+          await pageCache.set(url, readable);
+          return { text: readable === null ? undefined : readable, attempted: true, cacheHit: false, negativeCacheHit: false };
+        } finally {
+          await parser.destroy();
+        }
+      } catch {
+        await pageCache.set(url, null);
+        return { attempted: true, cacheHit: false, negativeCacheHit: false };
+      }
     }
 
-    const raw = (await response.text()).slice(0, MAX_PAGE_CHARS);
+    // 2. Handle Plain Text
     if (/text\/plain/i.test(contentType)) {
+      const raw = (await response.text()).slice(0, MAX_PAGE_CHARS);
       const plain = normalizeWhitespace(raw).slice(0, MAX_PAGE_CHARS);
-      await pageCache.set(url, plain);
-      return { text: plain, attempted: true, cacheHit: false, negativeCacheHit: false };
+      const readable = plain.length > 160 ? plain : null;
+      await pageCache.set(url, readable);
+      return { text: readable === null ? undefined : readable, attempted: true, cacheHit: false, negativeCacheHit: false };
     }
 
-    const $ = cheerio.load(raw);
-    $("script, style, noscript, svg, iframe, nav, header, footer, form").remove();
-    const text = normalizeWhitespace($("article, main, body").text());
-    const readable = text.length > 160 ? text.slice(0, MAX_PAGE_CHARS) : null;
-    await pageCache.set(url, readable);
-    return { text: readable === null ? undefined : readable, attempted: true, cacheHit: false, negativeCacheHit: false };
+    // 3. Handle HTML pages
+    if (/text\/html|application\/xhtml\+xml/i.test(contentType) || !contentType) {
+      const raw = (await response.text()).slice(0, MAX_PAGE_CHARS);
+      const $ = cheerio.load(raw);
+      $("script, style, noscript, svg, iframe, nav, header, footer, form").remove();
+      const text = normalizeWhitespace($("article, main, body").text());
+      const readable = text.length > 160 ? text.slice(0, MAX_PAGE_CHARS) : null;
+      await pageCache.set(url, readable);
+      return { text: readable === null ? undefined : readable, attempted: true, cacheHit: false, negativeCacheHit: false };
+    }
+
+    await pageCache.set(url, null);
+    return { attempted: true, cacheHit: false, negativeCacheHit: false };
   } catch {
     await pageCache.set(url, null);
     return { attempted: true, cacheHit: false, negativeCacheHit: false };
   }
 }
 
+/**
+ * Searches across all enabled search engines and academic databases
+ */
 export async function searchWebCandidatesDetailed(chunkText: string, maxResults = 5, deep = false, profile: SearchProfile = {}): Promise<WebSearchResult> {
-  const perQuery = deep ? 7 : maxResults;
-  const queries = buildSearchQueries(chunkText, deep).slice(0, profile.queryLimit ?? (deep ? 5 : 3));
+  const perQuery = deep ? 6 : maxResults;
+  const queries = buildSearchQueries(chunkText, deep).slice(0, profile.queryLimit ?? (deep ? 4 : 3));
   const tasks: ProviderTask[] = [];
   const diagnostics = emptySearchDiagnostics();
   const googleConfigured = Boolean(process.env.GOOGLE_SEARCH_API_KEY?.trim() && process.env.GOOGLE_SEARCH_ENGINE_ID?.trim());
   const braveConfigured = Boolean(process.env.BRAVE_SEARCH_API_KEY?.trim());
-  const academicEnabled = deep && profile.includeAcademic !== false;
-  const openAlexConfigured = Boolean(process.env.OPENALEX_API_KEY?.trim());
+  const academicEnabled = profile.includeAcademic !== false;
 
   for (const query of queries) {
     tasks.push({ provider: "DuckDuckGo", run: () => searchDuckDuckGo(query, perQuery) });
     tasks.push({ provider: "Wikipedia", run: () => searchWikipedia(query, Math.min(3, perQuery)) });
+    tasks.push({ provider: "Crossref", run: () => searchCrossref(query, Math.min(4, perQuery)) });
+    if (academicEnabled) {
+      tasks.push({ provider: "OpenAlex", run: () => searchOpenAlex(query, Math.min(4, perQuery)) });
+      tasks.push({ provider: "Semantic Scholar", run: () => searchSemanticScholar(query, Math.min(3, perQuery)) });
+    }
     if (googleConfigured) tasks.push({ provider: "Google", run: () => searchGoogleCustom(query, perQuery) });
     if (braveConfigured) tasks.push({ provider: "Brave", run: () => searchBrave(query, perQuery) });
-    if (academicEnabled) {
-      tasks.push({ provider: "Semantic Scholar", run: () => searchSemanticScholar(query, Math.min(5, perQuery)) });
-      if (openAlexConfigured) tasks.push({ provider: "OpenAlex", run: () => searchOpenAlex(query, Math.min(5, perQuery)) });
-    }
   }
 
   if (!googleConfigured) diagnostics.providers.push(skippedProvider("Google", "не налаштовано API-ключ і Search Engine ID"));
   if (!braveConfigured) diagnostics.providers.push(skippedProvider("Brave", "не налаштовано API-ключ"));
-  if (deep && !academicEnabled) {
-    diagnostics.providers.push(skippedProvider("Semantic Scholar", "вимкнено профілем довгого сканування"));
-    diagnostics.providers.push(skippedProvider("OpenAlex", "вимкнено профілем довгого сканування"));
-  } else if (academicEnabled && !openAlexConfigured) {
-    diagnostics.providers.push(skippedProvider("OpenAlex", "не налаштовано API-ключ"));
-  }
 
   const taskResults = await Promise.all(tasks.map(runProviderTask));
   const providerDiagnostics = mergeSearchDiagnostics(diagnostics, ...taskResults.map(({ diagnostic }) => ({ ...emptySearchDiagnostics(), providers: [diagnostic] })));
   const candidates = dedupeByUrl(interleaveCandidates(taskResults.map(({ candidates: group }) => group)))
-    .slice(0, deep ? 18 : 10)
+    .slice(0, deep ? 20 : 12)
     .slice(0, maxResults);
   const hydrateLimit = Math.min(candidates.length, profile.hydrateLimit ?? candidates.length);
   const hydration = await hydrateSearchCandidatesDetailed(candidates.slice(0, hydrateLimit), hydrateLimit);
