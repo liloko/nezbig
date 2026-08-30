@@ -161,13 +161,17 @@ export default function HumanizePage({ showToast }: { showToast: (msg: string, t
 
       {humanized && (
         <HumanizePanel
-          result={humanized}
-          sourceHtml={editor.sourceHtml}
-          sourceText={editor.text}
-          fileName={editor.selectedFile?.name || "document.docx"}
-          onExportDocx={() => wordExport.exportWord(humanized, editor.selectedFile?.name || "document.docx")}
-          onScanHumanized={() => {
-            navigate(`/?text=${encodeURIComponent(humanized.humanizedText)}`);
+          humanized={humanized}
+          wordDownloadBusy={wordExport.wordDownloadBusy}
+          selectedFile={editor.selectedFile}
+          onMoveToChecker={() => {
+            navigate(`/?text=${encodeURIComponent(humanized.revisedText)}`);
+          }}
+          onCopyFormatted={() => {
+            void wordExport.copyFormattedForWord(humanized.revisedHtml || "", humanized.revisedText);
+          }}
+          onDownloadForWord={() => {
+            void wordExport.downloadHumanizedForWord(humanized, editor.selectedFile, editor.fileName);
           }}
         />
       )}
