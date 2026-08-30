@@ -1,5 +1,5 @@
 import { useState, useCallback } from "react";
-import type { HumanizeResult } from "../../shared/types";
+import type { HumanizeMode, HumanizeResult } from "../../shared/types";
 
 export function useHumanize() {
   const [humanizerBusy, setHumanizerBusy] = useState(false);
@@ -8,7 +8,8 @@ export function useHumanize() {
   const handleHumanize = useCallback(async (
     text: string,
     sourceHtml: string,
-    selectedFile: File | null
+    selectedFile: File | null,
+    mode: HumanizeMode = "academic"
   ): Promise<HumanizeResult> => {
     setHumanizerBusy(true);
     setHumanized(null);
@@ -17,12 +18,13 @@ export function useHumanize() {
       if (selectedFile) {
         const formData = new FormData();
         formData.append("file", selectedFile);
+        formData.append("mode", mode);
         response = await fetch("/api/humanize-file", { method: "POST", body: formData });
       } else {
         response = await fetch("/api/humanize", {
           method: "POST",
           headers: { "content-type": "application/json" },
-          body: JSON.stringify({ text, html: sourceHtml })
+          body: JSON.stringify({ text, html: sourceHtml, mode })
         });
       }
       

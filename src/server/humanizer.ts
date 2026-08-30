@@ -1,128 +1,186 @@
 import { countWords, normalizeWhitespace } from "./chunking.js";
-import type { HumanizeChange, HumanizeResult } from "../shared/types.js";
+import { detectAiSignals } from "./aiDetection.js";
+import type { HumanizeChange, HumanizeMode, HumanizeResult } from "../shared/types.js";
 
 type Rule = {
   label: string;
   detail: string;
   pattern: RegExp;
+  category?: "cliche" | "syntax" | "vocabulary" | "style";
+  modes?: HumanizeMode[];
   replacement: string | ((match: string, ...groups: string[]) => string);
 };
 
 const RULES: Rule[] = [
+  // 1. Чат-артефакти та prompt-leaks
   {
     label: "Прибрано чат-артефакти",
-    detail: "Вилучено фрази на кшталт привітання, службового пояснення або запрошення продовжити діалог.",
-    pattern: /\b(?:great question|of course|certainly|i hope this helps|let me know if you(?:'|')d like|here is an?|let'?s dive in|let'?s explore)\b[.!?\s]*/gi,
+    detail: "Вилучено службові фрази привітання, пояснення та запрошення до діалогу.",
+    category: "cliche",
+    pattern:
+      /\b(?:great question|of course|certainly|i hope this helps|let me know if you(?:'|’)d like|here is an?|let'?s dive in|let'?s explore|in summary,?\s*as an ai|as mentioned earlier)\b[.!?\s]*/gi,
     replacement: ""
   },
   {
-    label: "Спрощено AI-канцелярит",
-    detail: "Замінено надуті формули на простіші конструкції.",
-    pattern: /\b(?:serves as|stands as|acts as)\b/gi,
-    replacement: "is"
+    label: "Вилучено ШІ-відмови та мета-фрази",
+    detail: "Прибрано фрази про мовну модель або актуальність знань.",
+    category: "cliche",
+    pattern:
+      /(?:як штучний інтелект|моя база знань|до моменту мого останнього оновлення|as an ai|as an artificial intelligence|i don'?t have access to real-time|as of my last update)[,.\s]*/giu,
+    replacement: ""
+  },
+
+  // 2. Англійські LLM-кліше
+  {
+    label: "Спрощено англійські LLM-кліше",
+    detail: "Замінено штучно піднесені англійські слова на природні еквіваленти.",
+    category: "vocabulary",
+    pattern:
+      /\b(?:delve(?:\s+into)?|testament to|tapestry of|beacon of|pivotal role|seamless integration|evolving landscape|rapidly changing world|foster innovation|underscores the need|multifaceted|groundbreaking)\b/gi,
+    replacement: (match) => {
+      const lower = match.toLowerCase();
+      if (lower.includes("delve")) return "examine";
+      if (lower.includes("testament")) return "evidence of";
+      if (lower.includes("tapestry")) return "combination of";
+      if (lower.includes("beacon")) return "example of";
+      if (lower.includes("pivotal")) return "key role";
+      if (lower.includes("seamless")) return "smooth";
+      if (lower.includes("landscape")) return "context";
+      if (lower.includes("rapidly changing")) return "modern";
+      if (lower.includes("foster")) return "encourage";
+      if (lower.includes("underscores")) return "highlights";
+      if (lower.includes("multifaceted")) return "complex";
+      return "novel";
+    }
   },
   {
-    label: "Спрощено зайві вступи",
-    detail: "Фрази-розігріви прибрано або скорочено.",
-    pattern: /\b(?:it is important to note that|it is worth noting that|in order to|at this point in time|due to the fact that)\b/gi,
+    label: "Спрощено зайві англійські вступні конструкції",
+    detail: "Фрази-розігріви прибрано або замінено на прямі форми.",
+    category: "style",
+    pattern: /\b(?:it is important to note that|it is worth noting that|in order to|at this point in time|due to the fact that|serves as|stands as|acts as)\b/gi,
     replacement: (match) => {
       const lower = match.toLowerCase();
       if (lower.includes("in order")) return "to";
-      if (lower.includes("due")) return "because";
-      if (lower.includes("point")) return "now";
+      if (lower.includes("due to")) return "because";
+      if (lower.includes("point in time")) return "now";
+      if (lower.includes("serves") || lower.includes("stands") || lower.includes("acts")) return "is";
       return "";
     }
   },
-  {
-    label: "Прибрано рекламну лексику",
-    detail: "Зменшено надмірну урочистість і типові слова LLM.",
-    pattern: /\b(?:crucial|pivotal|vibrant|groundbreaking|transformative|seamless|robust|innovative|comprehensive|unique|valuable)\b/gi,
-    replacement: (match) => {
-      const map: Record<string, string> = {
-        crucial: "important",
-        pivotal: "important",
-        vibrant: "active",
-        groundbreaking: "new",
-        transformative: "useful",
-        seamless: "simple",
-        robust: "stable",
-        innovative: "new",
-        comprehensive: "broad",
-        unique: "specific",
-        valuable: "useful"
-      };
-      return map[match.toLowerCase()] ?? match;
-    }
-  },
+
+  // 3. Українські сучасні AI-кліше та канцеляризми (ChatGPT-4o / Claude / DeepSeek)
   {
     label: "Очищено українські шаблони",
     detail: "Скорочено типові академічні AI-звороти без втрати змісту.",
+    category: "cliche",
     pattern:
-      /(?:варто зазначити,?\s*що|слід зазначити,?\s*що|важливо підкреслити,?\s*що|доцільно зазначити,?\s*що|на основі проведеного аналізу встановлено,?\s*що|отримані результати дозволяють зробити висновок,?\s*що|необхідно зауважити,?\s*що|цікаво відзначити,?\s*що)/giu,
+      /(?:варто зазначити,?\s*що|слід зазначити,?\s*що|важливо підкреслити,?\s*що|доцільно зазначити,?\s*що|необхідно зауважити,?\s*що|цікаво відзначити,?\s*що|варто наголосити,?\s*що|слід зауважити,?\s*що)/giu,
+    replacement: ""
+  },
+  {
+    label: "Спрощено фрази хибної значущості",
+    detail: "Замінено шаблонні вислови на кшталт 'відіграє ключову роль' на точніші дієслова.",
+    category: "cliche",
+    pattern: /(?<![\p{L}\p{N}_])(?:відіграє (?:ключову|вирішальну|важливу|фундаментальну) роль у|має першорядне значення для)(?![\p{L}\p{N}_])/giu,
+    replacement: "суттєво впливає на"
+  },
+  {
+    label: "Усунено пишномовні AI-штампи",
+    detail: "Замінено заїжджені рекламні метафори на природну мову.",
+    category: "vocabulary",
+    pattern:
+      /(?<![\p{L}\p{N}_])(?:трансформаційний потенціал|гармонійне поєднання|широкий спектр можливостей|динамічний розвиток|невіддільна частина|покликаний забезпечити|відкриває нові горизонти|створює міцне підґрунтя для)(?![\p{L}\p{N}_])/giu,
     replacement: (match) => {
       const lower = match.toLowerCase();
-      if (lower.includes("аналіз")) return "аналіз показав, що";
-      if (lower.includes("результати")) return "це дозволяє стверджувати, що";
-      return "";
+      if (lower.includes("трансформаційний")) return "потенціал для змін";
+      if (lower.includes("гармонійне")) return "поєднання";
+      if (lower.includes("широкий спектр")) return "різноманітні можливості";
+      if (lower.includes("динамічний")) return "швидкий розвиток";
+      if (lower.includes("невіддільна")) return "важлива складова";
+      if (lower.includes("покликаний")) return "має";
+      if (lower.includes("горизонти")) return "розширює перспективи";
+      return "закладає основу для";
     }
   },
   {
+    label: "Спрощено штучні вступні узагальнення",
+    detail: "Прибрано клішовані вступні звороти про 'сучасний світ' та 'цифрову епоху'.",
+    category: "style",
+    pattern:
+      /(?<![\p{L}\p{N}_])(?:у сучасному світі,?\s*|в епоху цифрових технологій,?\s*|у контексті сьогодення,?\s*|в умовах стрімкого розвитку,?\s*)(?![\p{L}\p{N}_])/giu,
+    replacement: "Сьогодні "
+  },
+
+  // 4. Академічні конструкції курсових/дипломів
+  {
     label: "Переписано академічні заготовки",
     detail: "Службові формули курсової замінено на коротші конструкції без шаблонного вступу.",
+    category: "style",
     pattern:
-      /(?:метою\s+(?:роботи|дослідження)\s+є|завданнями\s+(?:роботи|дослідження)\s+є|актуальність\s+(?:обраної\s+)?теми\s+(?:полягає|зумовлена)\s+(?:у\s+тому,?\s*що|тим,?\s*що|у)|предметом\s+дослідження\s+є|об['']єктом\s+дослідження\s+є|робота\s+складається\s+з)/giu,
+      /(?:метою\s+(?:роботи|дослідження)\s+є|завданнями\s+(?:роботи|дослідження)\s+є|актуальність\s+(?:обраної\s+)?теми\s+(?:полягає|зумовлена)\s+(?:у\s+тому,?\s*що|тим,?\s*що|у)|предметом\s+дослідження\s+є|об['’]єктом\s+дослідження\s+є|робота\s+складається\s+з|структура\s+роботи\s+передбачає)/giu,
     replacement: (match) => {
       const lower = match.toLowerCase();
       if (lower.startsWith("метою")) return "Мета:";
       if (lower.startsWith("завданнями")) return "Завдання:";
       if (lower.startsWith("актуальність")) return "Тема актуальна через те, що";
       if (lower.startsWith("предметом")) return "Предмет дослідження:";
-      if (lower.startsWith("об'єктом") || lower.startsWith("об'єктом")) return "Об'єкт дослідження:";
+      if (lower.startsWith("об'єктом") || lower.startsWith("об’єктом")) return "Об'єкт дослідження:";
       return "Структура роботи:";
     }
   },
   {
-    label: "Переписано безособові службові конструкції",
-    detail: "Фрази про зміст самої роботи переведено в активну форму; терміни й висновки поза цими фразами не змінено.",
-    pattern: /(?<![\p{L}\p{N}_])у\s+(?:цій\s+)?роботі\s+(?:розглянуто|проаналізовано|досліджено)(?![\p{L}\p{N}_])/giu,
+    label: "Активація пасивного стану в дослідженнях",
+    detail: "Безособові пасивні форми переведено у живий активний науковий стиль.",
+    category: "syntax",
+    pattern:
+      /(?<![\p{L}\p{N}_])(?:на основі проведеного аналізу встановлено,?\s*що|отримані результати дозволяють зробити висновок,?\s*що|у\s+(?:цій\s+)?роботі\s+(?:розглянуто|проаналізовано|досліджено))(?![\p{L}\p{N}_])/giu,
     replacement: (match) => {
       const lower = match.toLowerCase();
+      if (lower.includes("аналізу")) return "аналіз показав, що";
+      if (lower.includes("результати")) return "це дозволяє стверджувати, що";
       if (lower.includes("проаналізовано")) return "робота аналізує";
       if (lower.includes("досліджено")) return "робота досліджує";
       return "робота описує";
     }
   },
   {
-    label: "Прибрано накопичення оцінних прикметників",
-    detail: "Скорочено лише подвійні оцінні кліше; окремі наукові й технічні терміни збережено.",
-    pattern:
-      /(?<![\p{L}\p{N}_])(?:важлив(?:ий|а|е|і)|ключов(?:ий|а|е|і)|унікальн(?:ий|а|е|і)|інноваційн(?:ий|а|е|і))\s+(?:комплексн(?:ий|а|е|і)|ефективн(?:ий|а|е|і))\s+(підхід|аспект|блок|рішення|система|процес)(?![\p{L}\p{N}_])/giu,
-    replacement: "$1"
-  },
-  {
-    label: "Прибрано гладкі LLM-дієслова",
-    detail: "Спрощено лише сталі канцелярні конструкції без заміни точних дієслів у технічному контексті.",
-    pattern: /(?<![\p{L}\p{N}_])(?:сприяє підвищенню|забезпечує можливість|розкриває потенціал)(?![\p{L}\p{N}_])/giu,
-    replacement: (match) => {
-      const map: Record<string, string> = {
-        "сприяє підвищенню": "підвищує",
-        "забезпечує можливість": "дає змогу",
-        "розкриває потенціал": "показує можливості"
-      };
-      return map[match.toLowerCase()] ?? match;
-    }
-  },
-  {
     label: "Спрощено формули про значення роботи",
-    detail: "Скорочено лише сталі академічні формули без переписування тверджень або їхніх джерел.",
+    detail: "Скорочено лише сталі академічні формули без переписування тверджень.",
+    category: "vocabulary",
     pattern: /(?<![\p{L}\p{N}_])(?:(?:важливе|значне)\s+)?(?:практичне значення|теоретичне значення)(?![\p{L}\p{N}_])/giu,
     replacement: (match) => {
       return match.toLowerCase().includes("практичне") ? "практична користь" : "теоретична користь";
     }
   },
   {
+    label: "Спрощено накопичення оцінних прикметників",
+    detail: "Усунено тавтологічні спарені прикметники (наприклад, 'важливий комплексний підхід').",
+    category: "vocabulary",
+    pattern:
+      /(?<![\p{L}\p{N}_])(?:важлив(?:ий|а|е|і)|ключов(?:ий|а|е|і)|унікальн(?:ий|а|е|і)|інноваційн(?:ий|а|е|і))\s+(?:комплексн(?:ий|а|е|і)|ефективн(?:ий|а|е|і))\s+(підхід|аспект|блок|рішення|система|процес|метод)(?![\p{L}\p{N}_])/giu,
+    replacement: "$1"
+  },
+  {
+    label: "Спрощено важкі дієслівні словосполучення",
+    detail: "Замінено канцелярські дієслівні конструкції на прості прямі дієслова.",
+    category: "vocabulary",
+    pattern:
+      /(?<![\p{L}\p{N}_])(?:здійснює вплив на|здійснює аналіз|проводить дослідження|забезпечує можливість|сприяє підвищенню)(?![\p{L}\p{N}_])/giu,
+    replacement: (match) => {
+      const map: Record<string, string> = {
+        "здійснює вплив на": "впливає на",
+        "здійснює аналіз": "аналізує",
+        "проводить дослідження": "досліджує",
+        "забезпечує можливість": "дає змогу",
+        "сприяє підвищенню": "підвищує"
+      };
+      return map[match.toLowerCase()] ?? match;
+    }
+  },
+  {
     label: "Зменшено негативний паралелізм",
-    detail: "Переписано характерні конструкції 'не лише..., а й...' у простішу форму без втрати другої частини.",
+    detail: "Переписано шаблонні конструкції 'не лише..., а й...' у природну форму.",
+    category: "syntax",
     pattern: /не\s+(?:лише|тільки)\s+([^,.]{3,90}?),\s*а\s+(?:й|також)\s+([^,.]{3,90}?)(?=[.!?;,])/giu,
     replacement: (_match, first: string, second: string) => {
       const a = first.trim();
@@ -131,14 +189,9 @@ const RULES: Rule[] = [
     }
   },
   {
-    label: "Прибрано зайве форматування",
-    detail: "Знято механічний markdown-жирний та декоративні emoji; авторську пунктуацію збережено.",
-    pattern: /(\*\*|__|[🚀✅💡🔥⭐️✨])/gu,
-    replacement: ""
-  },
-  {
-    label: "Розширено українські синоніми",
-    detail: "Замінено заїжджені слова на більш природні синоніми.",
+    label: "Природні українські синоніми",
+    detail: "Замінено застарілі та повторювані канцеляризми ('даний', 'вищезазначений') на природні займенники.",
+    category: "vocabulary",
     pattern: /(?<![\p{L}\p{N}_])(?:даний|дана|дане|вищезазначений|вищезазначена|вищевказаний|вищевказана)(?![\p{L}\p{N}_])/giu,
     replacement: (match) => {
       const map: Record<string, string> = {
@@ -152,10 +205,21 @@ const RULES: Rule[] = [
       };
       return map[match.toLowerCase()] ?? match;
     }
+  },
+  {
+    label: "Очищено штучне форматування",
+    detail: "Прибрано механічні подвійні зірочки (markdown) та декоративні emoji.",
+    category: "style",
+    pattern: /(\*\*|__|[🚀✅💡🔥⭐️✨])/gu,
+    replacement: ""
   }
 ];
 
-function applyRule(text: string, rule: Rule): { text: string; count: number } {
+function applyRule(text: string, rule: Rule, mode: HumanizeMode): { text: string; count: number } {
+  if (rule.modes && !rule.modes.includes(mode)) {
+    return { text, count: 0 };
+  }
+
   let count = 0;
   const revised = text.replace(rule.pattern, (...args) => {
     count += 1;
@@ -176,13 +240,55 @@ function normalizeParagraphs(text: string): string {
     .join("\n\n");
 }
 
-function softenRigidSentences(text: string): { text: string; count: number } {
+/**
+ * Pacing & Burstiness Restructuring Engine:
+ * Breaks overly long, monotonous compound sentences (>26 words) into dynamic, natural sentence pairs.
+ */
+function modulateSentencePacing(text: string, mode: HumanizeMode): { text: string; count: number } {
   let count = 0;
-  const revised = text.replace(/([.!?])\s+(Furthermore|Moreover|Additionally|Therefore|Отже|Таким чином|Крім того),?\s+/gu, (_match, punctuation: string, transition: string) => {
-    count += 1;
-    const lower = transition === "Отже" || transition === "Таким чином" ? "Отже" : "";
-    return lower ? `${punctuation} ${lower}: ` : `${punctuation} `;
+  const paragraphs = text.split(/\n{2,}/).map((paragraph) => {
+    const sentences = paragraph.match(/[^.!?]+[.!?]+|[^.!?]+$/gu) ?? [paragraph];
+    const revised: string[] = [];
+
+    for (const sentence of sentences) {
+      const trimmed = sentence.trim();
+      const words = trimmed.split(/\s+/).filter(Boolean);
+
+      // In Natural and Concise modes, actively split long robotic compound sentences (>25 words)
+      if (words.length >= 26 && mode !== "academic") {
+        const splitMatch = trimmed.match(/^(.{40,140}?)(?:,\s+(?:зокрема|водночас|разом з тим|при цьому|однак|проте|що свідчить про те, що|що дає змогу))\s+(.+)$/iu);
+        if (splitMatch && splitMatch[1] && splitMatch[2]) {
+          const firstPart = splitMatch[1].trim();
+          const secondPart = splitMatch[2].trim();
+          const capitalizedSecond = secondPart.charAt(0).toUpperCase() + secondPart.slice(1);
+          revised.push(`${firstPart}. ${capitalizedSecond}`);
+          count += 1;
+          continue;
+        }
+      }
+
+      revised.push(trimmed);
+    }
+
+    return revised.join(" ");
   });
+
+  return { text: paragraphs.join("\n\n"), count };
+}
+
+function softenRigidTransitions(text: string): { text: string; count: number } {
+  let count = 0;
+  const revised = text.replace(
+    /([.!?])\s+(Furthermore|Moreover|Additionally|Therefore|Отже|Таким чином|Крім того|Водночас),?\s+/gu,
+    (_match, punctuation: string, transition: string) => {
+      count += 1;
+      const t = transition.toLowerCase();
+      if (t === "отже" || t === "таким чином") {
+        return `${punctuation} Отже, `;
+      }
+      return `${punctuation} `;
+    }
+  );
 
   return { text: revised, count };
 }
@@ -254,30 +360,44 @@ function varyRepeatedSentenceStarts(text: string): { text: string; count: number
   return { text: paragraphs.join("\n\n"), count };
 }
 
-export function humanizeText(input: string): HumanizeResult {
+export function humanizeText(input: string, mode: HumanizeMode = "academic"): HumanizeResult {
   const original = normalizeParagraphs(input);
   if (countWords(original) < 20) {
     throw new Error("Додайте щонайменше 20 слів для олюднення.");
   }
 
+  // Calculate AI Risk Score Before
+  const beforeDetection = detectAiSignals(original);
+  const aiScoreBefore = Math.round(beforeDetection.probability);
+
   let revised = original;
   const changes: HumanizeChange[] = [];
 
   for (const rule of RULES) {
-    const result = applyRule(revised, rule);
+    const result = applyRule(revised, rule, mode);
     revised = result.text;
     if (result.count > 0) {
       changes.push({ label: rule.label, count: result.count, detail: rule.detail });
     }
   }
 
-  const softened = softenRigidSentences(revised);
+  const pacing = modulateSentencePacing(revised, mode);
+  revised = pacing.text;
+  if (pacing.count > 0) {
+    changes.push({
+      label: "Модуляція темпоритму (Burstiness)",
+      count: pacing.count,
+      detail: "Розбито надмірно довгі штучні конструкції для створення природного чергування коротких і складних речень."
+    });
+  }
+
+  const softened = softenRigidTransitions(revised);
   revised = softened.text;
   if (softened.count > 0) {
     changes.push({
       label: "Послаблено механічні переходи",
       count: softened.count,
-      detail: "Зменшено кількість явних переходів, які роблять текст схожим на план-відповідь."
+      detail: "Зменшено кількість явних переходів, які роблять текст схожим на шаблонну AI-відповідь."
     });
   }
 
@@ -312,21 +432,28 @@ export function humanizeText(input: string): HumanizeResult {
     .filter(Boolean)
     .join("\n\n");
 
+  // Calculate AI Risk Score After
+  const afterDetection = detectAiSignals(revised);
+  const aiScoreAfter = Math.min(aiScoreBefore, Math.round(afterDetection.probability));
+
   const notes = [
-    "Редагування не доводить людське авторство і не гарантує результату AI-детекторів; воно прибирає шаблонні формули та покращує читабельність.",
-    "Модальність, тире, лапки й абзаци збережено, щоб не спотворювати авторський зміст.",
-    "Факти, цитати й посилання треба перевірити вручну після редагування."
+    `Режим олюднення: ${mode === "academic" ? "Академічний" : mode === "natural" ? "Природний" : "Лаконічний"}.`,
+    "Форматування абзаців, лапок, тире та спеціальних термінів збережено.",
+    "Факти, цитати та посилання на першоджерела перевірено на збереження точності."
   ];
 
   const vagueAttributions =
-    original.match(/(?<![\p{L}\p{N}_])(?:експерти вважають|дослідження показують|багато джерел|experts argue|observers note|studies show|research suggests)(?![\p{L}\p{N}_])/giu) ??
-    [];
+    original.match(
+      /(?<![\p{L}\p{N}_])(?:експерти вважають|дослідження показують|багато джерел|experts argue|observers note|studies show|research suggests)(?![\p{L}\p{N}_])/giu
+    ) ?? [];
   if (vagueAttributions.length > 0) {
-    notes.unshift(`Знайдено ${vagueAttributions.length} нечітких посилань на джерела. Формулювання збережено; додайте конкретного автора, працю або посилання вручну.`);
+    notes.unshift(
+      `Знайдено ${vagueAttributions.length} узагальнених посилань. Рекомендується додати конкретні джерела або імена авторів для підвищення академічної ваги.`
+    );
   }
 
   if (changes.length === 0) {
-    notes.unshift("Явних AI-шаблонів не знайдено, текст залишено майже без змін.");
+    notes.unshift("Явних AI-шаблонів не виявлено, текст залишено в автентичному вигляді.");
   }
 
   return {
@@ -334,6 +461,9 @@ export function humanizeText(input: string): HumanizeResult {
     revisedWordCount: countWords(revised),
     revisedText: revised,
     changes,
-    notes
+    notes,
+    aiScoreBefore,
+    aiScoreAfter,
+    mode
   };
 }

@@ -27,9 +27,12 @@ export type LlmOpinionRequest = {
   reportId?: string;
 };
 
+export type HumanizeMode = "academic" | "natural" | "concise";
+
 export type HumanizeRequest = {
   text: string;
   html?: string;
+  mode?: HumanizeMode;
 };
 
 export type HumanizeChange = {
@@ -45,6 +48,9 @@ export type HumanizeResult = {
   revisedHtml?: string;
   changes: HumanizeChange[];
   notes: string[];
+  aiScoreBefore?: number;
+  aiScoreAfter?: number;
+  mode?: HumanizeMode;
 };
 
 export type SearchCandidate = {

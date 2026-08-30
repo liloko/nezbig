@@ -1,6 +1,7 @@
 import { normalizeWhitespace } from "./chunking.js";
 import { detectAiLanguageCoverage } from "./aiLanguage.js";
 import { prepareAiAnalysisText } from "./aiTextPreprocess.js";
+import { performStylometryAnalysis } from "./aiStylometry.js";
 import { tokenize, splitSentences, clampScore, coefficientOfVariation, countRegexMatches, sampleEvidence } from "./utils/textUtils.js";
 export const AI_SCORING_WEIGHTS = {
     statistical: 0.38,
@@ -29,22 +30,23 @@ export const AI_VERDICT_THRESHOLDS = {
     uncertainFloorProbability: 12,
     insufficientWords: 80
 };
-const EN_TRANSITIONS = new Set(["therefore", "however", "moreover", "furthermore", "additionally", "consequently", "overall"]);
-const UA_TRANSITIONS = new Set(["важливо", "отже", "проте", "однак", "таким", "загалом", "водночас", "натомість", "по-перше", "по-друге", "насамкінець"]);
+const EN_TRANSITIONS = new Set(["therefore", "however", "moreover", "furthermore", "additionally", "consequently", "overall", "in conclusion", "further", "notably"]);
+const UA_TRANSITIONS = new Set(["важливо", "отже", "проте", "однак", "таким", "загалом", "водночас", "натомість", "по-перше", "по-друге", "насамкінець", "зокрема"]);
 const TRANSITIONS = new Set([...EN_TRANSITIONS, ...UA_TRANSITIONS]);
-const EN_HEDGES = new Set(["may", "might", "could", "typically", "often"]);
-const UA_HEDGES = new Set("може ймовірно зазвичай часто можливо потенційно".split(" "));
+const EN_HEDGES = new Set(["may", "might", "could", "typically", "often", "arguably", "potentially"]);
+const UA_HEDGES = new Set("може ймовірно зазвичай часто можливо потенційно як правило".split(" "));
 const HEDGES = new Set([...EN_HEDGES, ...UA_HEDGES]);
 const AI_PATTERN_GROUPS = [
     {
         label: "AI-лексика і канцелярит",
         category: "pattern",
-        weight: 0.7,
+        weight: 0.75,
         patterns: [
-            /(?:crucial|pivotal|vibrant|valuable|seamless|robust|innovative|transformative|groundbreaking|comprehensive|meticulous|unwavering|versatile|alignment|synergy)/gi,
-            /(?:delve|leverage|utilize|enhance|underscore|showcase|foster|facilitate|optimize|navigate the complexities|tapestry of|testament to|evolving landscape|rapidly changing)/gi,
-            /(?:ключов(?:ий|а|е|і)|важлив(?:ий|а|е|і)|комплексн(?:ий|а|е|і)|ефективн(?:ий|а|е|і)|інноваційн(?:ий|а|е|і))[^.!?]{0,70}(?:підхід|рішення|роль|значення|розвиток|система)/gi,
-            /(?:підкреслює|відіграє ключову роль|розкриває потенціал|важливо розуміти|варто відмітити|варто зауважити|вимагає уваги)/gi
+            /(?:crucial|pivotal|vibrant|valuable|seamless|robust|innovative|transformative|groundbreaking|comprehensive|meticulous|unwavering|versatile|alignment|synergy|multifaceted|beacon of|tapestry of|testament to)/gi,
+            /(?:delve|leverage|utilize|enhance|underscore|showcase|foster|facilitate|optimize|navigate the complexities|evolving landscape|rapidly changing|it is important to note|in essence)/gi,
+            /(?:ключов(?:ий|а|е|і)|важлив(?:ий|а|е|і)|комплексн(?:ий|а|е|і)|ефективн(?:ий|а|е|і)|інноваційн(?:ий|а|е|і))[^.!?]{0,70}(?:підхід|рішення|роль|значення|розвиток|система|чинник|аспект)/gi,
+            /(?:підкреслює|відіграє (?:ключову|вирішальну|важливу) роль|розкриває потенціал|важливо розуміти|варто відмітити|варто зауважити|вимагає уваги|нерозривно пов'язан|створює міцне підґрунтя)/gi,
+            /(?:трансформаційний потенціал|гармонійне поєднання|широкий спектр|динамічний розвиток|невіддільна частина|покликаний забезпечити|відкриває нові горизонти)/gi
         ]
     },
     {
@@ -52,8 +54,8 @@ const AI_PATTERN_GROUPS = [
         category: "pattern",
         weight: 0.85,
         patterns: [
-            /(?:moreover|furthermore|additionally|nevertheless|in conclusion|to summarize|it is important to note|it is worth noting|lastly|first and foremost|on the other hand|consequently)/gi,
-            /(?:варто зазначити|слід зазначити|важливо підкреслити|таким чином|у підсумку|на завершення|з огляду на це|по-перше|зокрема|з іншого боку|крім того|водночас)/gi
+            /(?:moreover|furthermore|additionally|nevertheless|in conclusion|to summarize|it is important to note|it is worth noting|lastly|first and foremost|on the other hand|consequently|in light of this)/gi,
+            /(?:варто зазначити|слід зазначити|важливо підкреслити|таким чином|у підсумку|на завершення|з огляду на це|по-перше|зокрема|з іншого боку|крім того|водночас|разом з тим|насамкінець)/gi
         ]
     },
     {
@@ -63,7 +65,7 @@ const AI_PATTERN_GROUPS = [
         patterns: [
             /not only\b[\s\S]{0,90}\bbut also/gi,
             /it's not just\b[\s\S]{0,90}\bit'?s/gi,
-            /(?:не лише|не тільки)[\s\S]{0,90}(?:а й|але й)/gi,
+            /(?:не лише|не тільки)[\s\S]{0,90}(?:а й|але й|а також)/gi,
             /(?:по-перше|по-друге|по-третє)/gi,
             /(?:firstly|secondly|thirdly)/gi,
             /\d\.\s.*\d\.\s.*\d\.\s/g // Списки 1. 2. 3.
@@ -74,10 +76,10 @@ const AI_PATTERN_GROUPS = [
         category: "pattern",
         weight: 0.55,
         patterns: [
-            /(?:у\s+роботі\s+(?:розглянуто|проаналізовано|досліджено|визначено|узагальнено))/gi,
-            /(?:метою\s+(?:роботи|дослідження)\s+є|завданнями\s+(?:роботи|дослідження)\s+є|робота\s+складається\s+з)/gi,
+            /(?:у\s+роботі\s+(?:розглянуто|проаналізовано|досліджено|визначено|узагальнено|висвітлено))/gi,
+            /(?:метою\s+(?:роботи|дослідження)\s+є|завданнями\s+(?:роботи|дослідження)\s+є|робота\s+складається\s+з|структура\s+роботи\s+передбачає)/gi,
             /(?:актуальність\s+(?:обраної\s+)?теми\s+(?:полягає|зумовлена)|предметом\s+дослідження\s+є|об['’]єктом\s+дослідження\s+є)/gi,
-            /(?:на\s+основі\s+проведеного\s+аналізу|отримані\s+результати\s+дозволяють|доцільно\s+зазначити)/gi
+            /(?:на\s+основі\s+проведеного\s+аналізу|отримані\s+результати\s+дозволяють|доцільно\s+зазначити|підсумовуючи\s+викладене)/gi
         ]
     },
     {
@@ -163,12 +165,14 @@ function impersonalAcademicVoice(text, wordCount) {
     };
 }
 function safeguardScore(normalized, wordCount, placeholderText, academicStructure) {
-    const citations = countRegexMatches(normalized, /\[[0-9]{1,3}\]|\([A-ZА-ЯІЇЄҐ][\p{L}'-]+,\s*20[0-9]{2}\)|https?:\/\/\S+|doi:\s*\S+/giu);
-    const numbers = countRegexMatches(normalized, /\b\d+(?:[.,]\d+)?\s*(?:%|грн|uah|usd|км|м|року|р\.|рік|years?)?\b/giu);
-    const firstPerson = countRegexMatches(normalized, /(?<![\p{L}\p{N}_])(?:я|мені|мою|моє|ми|наш|наша|i|my|we|our)(?![\p{L}\p{N}_])/giu);
+    const citations = countRegexMatches(normalized, /\[[0-9]{1,3}\]|\([A-ZА-ЯІЇЄҐ][\p{L}'-]+,\s*20[0-9]{2}\)|https?:\/\/\S+|doi:\s*\S+|дсту\s+[0-9]+|режим\s+доступу:|с\.\s*[0-9]+-[0-9]+|т\.\s*[0-9]+|№\s*[0-9]+/giu);
+    const figuresAndTables = countRegexMatches(normalized, /(?:рис\.|рисунок|табл\.|таблиця|схема|формула)\s*(?:[0-9]+|\([0-9]+\))/giu);
+    const numbers = countRegexMatches(normalized, /\b\d+(?:[.,]\d+)?\s*(?:%|грн|uah|usd|eur|км|м|см|мм|року|р\.|рік|years?|с|хв|год)\b/giu);
+    const firstPerson = countRegexMatches(normalized, /(?<![\p{L}\p{N}_])(?:я|мені|мою|моє|ми|наш|наша|нашому|наших|i|my|we|our)(?![\p{L}\p{N}_])/giu);
     const quotes = countRegexMatches(normalized, /["“„«][^"”»]{12,}["”»]/gu);
     const evidence = [
         citations.length ? `${citations.length} посилань або бібліографічних маркерів` : "",
+        figuresAndTables.length ? `${figuresAndTables.length} посилань на таблиці/рисунки` : "",
         numbers.length >= 3 ? `${numbers.length} числових/фактичних маркерів` : "",
         firstPerson.length >= 2 ? `${firstPerson.length} маркерів авторської позиції` : "",
         quotes.length ? `${quotes.length} довгих цитат` : "",
@@ -176,9 +180,10 @@ function safeguardScore(normalized, wordCount, placeholderText, academicStructur
         placeholderText ? "lorem ipsum / шаблонний наповнювач" : "",
         academicStructure ? "академічна структура: вступ, розділи або висновки не вважаються AI-ознакою" : ""
     ].filter(Boolean);
-    const score = clampScore(citations.length * 12 +
-        Math.min(20, numbers.length * 2.5) +
-        Math.min(15, firstPerson.length * 3.5) +
+    const score = clampScore(citations.length * 14 +
+        figuresAndTables.length * 10 +
+        Math.min(22, numbers.length * 2.5) +
+        Math.min(18, firstPerson.length * 3.5) +
         quotes.length * 10 +
         (wordCount < 180 ? 15 : 0) +
         (placeholderText ? 85 : 0) +
@@ -214,12 +219,14 @@ function analyzeSinglePass(text) {
     const contentWords = tokenize(normalized);
     const sentences = splitSentences(normalized);
     const proseSentences = sentences.filter((sentence) => !isSectionHeading(sentence));
+    const paragraphs = text.split(/\n{2,}/).map((p) => p.trim()).filter(Boolean);
     const wordCount = words.length;
     if (wordCount < 10)
         return { probability: 0, signals: [] };
     const mattr = movingAverageTypeTokenRatio(words);
     const sentenceLengths = proseSentences.map((sentence) => tokenize(sentence, true).length).filter(Boolean);
     const sentenceCv = coefficientOfVariation(sentenceLengths);
+    const stylometry = performStylometryAnalysis(normalized, proseSentences, paragraphs);
     const shares = languageWordShares(words);
     const transitionCounts = { cyrillic: 0, latin: 0 };
     const hedgeCounts = { cyrillic: 0, latin: 0 };
@@ -285,6 +292,16 @@ function analyzeSinglePass(text) {
             weight: 1.0
         },
         {
+            label: "Лексичний розподіл (Zipf & Hapax)",
+            score: stylometry.zipfScore,
+            category: "statistical",
+            detail: stylometry.zipfScore >= 35
+                ? `Текст має аномально низьку частку унікальних слів (${Math.round(stylometry.hapaxRatio * 100)}%), що характерно для генерацій ШІ із зацикленням на середньочастотній лексиці.`
+                : `Лексичний розподіл відповідає природній кривій (Hapax: ${Math.round(stylometry.hapaxRatio * 100)}%).`,
+            evidence: stylometry.zipfScore >= 30 ? [`частка Hapax Legomena ${Math.round(stylometry.hapaxRatio * 100)}%`] : [],
+            weight: 0.85
+        },
+        {
             label: "Лексична одноманітність",
             score: lexicalScore,
             category: "statistical",
@@ -292,6 +309,16 @@ function analyzeSinglePass(text) {
                 ? `Локальна різноманітність словника низька або є повторювані фрази (MATTR: ${Math.round(mattr * 100)}%).`
                 : `Локальна різноманітність словника не виглядає підозрілою (MATTR: ${Math.round(mattr * 100)}%).`,
             evidence: [`локальна унікальність словника ${Math.round(mattr * 100)}%`, ...repeatedNgrams.evidence].slice(0, 5),
+            weight: 0.8
+        },
+        {
+            label: "Синтаксичний темпоритм",
+            score: stylometry.rhythmDeltaScore,
+            category: "structure",
+            detail: stylometry.rhythmDeltaScore >= 35
+                ? "Сусідні речення мають майже ідентичну довжину без динамічних пауз та контрастів, типових для людини."
+                : "Темпоритм речень виглядає природно.",
+            evidence: stylometry.rhythmDeltaScore >= 30 ? ["низька різниця між сусідніми реченнями"] : [],
             weight: 0.8
         },
         {
@@ -332,13 +359,23 @@ function analyzeSinglePass(text) {
         },
         {
             label: "Одноманітна пунктуація",
-            score: punctuationScore,
+            score: Math.max(punctuationScore, stylometry.punctuationEntropyScore),
             category: "structure",
-            detail: punctuationScore >= 25
+            detail: punctuationScore >= 25 || stylometry.punctuationEntropyScore >= 30
                 ? "Пунктуація надто проста або рівна. Людські автори частіше використовують дужки, крапки з комою, тире або окличні знаки (подвійні дефіси не рахуються)."
-                : "Пунктуаційний малюнок не виглядає шаблонним.",
+                : "Пунктуаційний малюнок не виглядає шаблонним (подвійні дефіси не рахуються).",
             evidence: punctuationTypes.size ? [`${punctuationTypes.size} типів пунктуації`] : [],
             weight: 0.5
+        },
+        {
+            label: "Рівномірність абзаців",
+            score: stylometry.paragraphUniformityScore,
+            category: "structure",
+            detail: stylometry.paragraphUniformityScore >= 35
+                ? "Абзаци мають штучно однакову кількість слів, що є характерною ознакою генерацій мовних моделей."
+                : "Довжина абзаців варіюється природно.",
+            evidence: stylometry.paragraphUniformityScore >= 30 ? stylometry.evidence.filter((e) => e.includes("абзаців")) : [],
+            weight: 0.65
         },
         ...patternBased
     ];
@@ -477,6 +514,9 @@ function determineVerdict(wordCount, probability, reliability, language, windowS
         return "high";
     if (probability >= thresholds.elevatedProbability)
         return "elevated";
+    // Clean human texts with very low probability (<12%) and no strong suspicious segments
+    if (probability < thresholds.uncertainFloorProbability && strongest < 20 && segments.length === 0)
+        return "low";
     if (reliability.level === "low" || probability >= thresholds.uncertainFloorProbability || segments.length > 0)
         return "uncertain";
     return "low";

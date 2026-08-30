@@ -22,5 +22,7 @@ export const LlmOpinionRequestSchema = z.object({
 });
 
 export const HumanizeRequestSchema = z.object({
-  text: z.string().min(1, "Текст не може бути порожнім")
+  text: z.string().min(1, "Текст не може бути порожнім"),
+  html: z.string().optional(),
+  mode: z.enum(["academic", "natural", "concise"]).optional()
 });

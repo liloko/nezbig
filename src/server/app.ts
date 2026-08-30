@@ -551,10 +551,10 @@ app.post("/api/ai-opinion-file", fileLimiter, upload.single("file"), async (requ
 app.post("/api/humanize", scanLimiter, async (request, response) => {
   try {
     const body = HumanizeRequestSchema.parse(request.body);
-    const result = humanizeText(body.text);
+    const result = humanizeText(body.text, body.mode);
     response.json({
       ...result,
-      revisedHtml: (body as any).html?.trim() ? mergeRevisedTextIntoHtml((body as any).html, result.revisedText) : undefined
+      revisedHtml: body.html?.trim() ? mergeRevisedTextIntoHtml(body.html, result.revisedText) : undefined
     });
   } catch (error) {
     response.status(400).json({ error: error instanceof Error ? error.message : "Не вдалося олюднити текст." });
@@ -568,8 +568,9 @@ app.post("/api/humanize-file", fileLimiter, upload.single("file"), async (reques
       return;
     }
 
+    const mode = request.body?.mode === "natural" || request.body?.mode === "concise" ? request.body.mode : "academic";
     const extracted = await extractTextFromUpload(request.file);
-    const result = humanizeText(extracted.text);
+    const result = humanizeText(extracted.text, mode);
     response.json({
       ...result,
       revisedHtml: extracted.html ? mergeRevisedTextIntoHtml(extracted.html, result.revisedText) : undefined,

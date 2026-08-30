@@ -503,7 +503,7 @@ app.post("/api/ai-opinion-file", fileLimiter, upload.single("file"), async (requ
 app.post("/api/humanize", scanLimiter, async (request, response) => {
     try {
         const body = HumanizeRequestSchema.parse(request.body);
-        const result = humanizeText(body.text);
+        const result = humanizeText(body.text, body.mode);
         response.json({
             ...result,
             revisedHtml: body.html?.trim() ? mergeRevisedTextIntoHtml(body.html, result.revisedText) : undefined
@@ -519,8 +519,9 @@ app.post("/api/humanize-file", fileLimiter, upload.single("file"), async (reques
             response.status(400).json({ error: "Додайте файл для олюднення." });
             return;
         }
+        const mode = request.body?.mode === "natural" || request.body?.mode === "concise" ? request.body.mode : "academic";
         const extracted = await extractTextFromUpload(request.file);
-        const result = humanizeText(extracted.text);
+        const result = humanizeText(extracted.text, mode);
         response.json({
             ...result,
             revisedHtml: extracted.html ? mergeRevisedTextIntoHtml(extracted.html, result.revisedText) : undefined,
